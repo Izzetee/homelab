@@ -75,6 +75,13 @@
       "matchManagers": ["ansible-galaxy", "terraform"],
       "automerge": false,
       "addLabels": ["needs-user"]
+    },
+    {
+      "description": "The custom regex managers read the k3s-ansible collection and the OpenTofu version: same rule",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["k3s-io/k3s-ansible", "opentofu/opentofu"],
+      "automerge": false,
+      "addLabels": ["needs-user"]
     }
   ]
 }
