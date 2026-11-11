@@ -26,6 +26,24 @@
         "(?<depName>[a-z0-9][a-z0-9./_-]*):(?<currentValue>[A-Za-z0-9_][A-Za-z0-9._-]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Git-sourced Ansible collections on GitHub (the ansible-galaxy manager cannot look them up)",
+      "managerFilePatterns": ["/^ansible/requirements\\.ya?ml$/"],
+      "matchStrings": [
+        "name: https://github\\.com/(?<depName>[A-Za-z0-9_.-]+/[A-Za-z0-9_-]+)(?:\\.git)?\\s+type: git\\s+version: (?<currentValue>[A-Za-z0-9._-]+)"
+      ],
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "OpenTofu version pinned in required_version (the terraform manager would look up HashiCorp Terraform)",
+      "managerFilePatterns": ["/^tofu/.+\\.tf$/"],
+      "matchStrings": ["required_version\\s*=\\s*\"(?<currentValue>[0-9][0-9A-Za-z.-]*)\""],
+      "depNameTemplate": "opentofu/opentofu",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
     }
   ],
   "packageRules": [
@@ -33,6 +51,18 @@
       "description": "Wait three days after a release before proposing a version update",
       "matchUpdateTypes": ["major", "minor", "patch"],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Dependencies handled by the custom managers above are not read by the stock managers",
+      "matchManagers": ["ansible-galaxy"],
+      "matchDatasources": ["github-tags"],
+      "enabled": false
+    },
+    {
+      "description": "required_version is OpenTofu, not HashiCorp Terraform",
+      "matchManagers": ["terraform"],
+      "matchDepNames": ["hashicorp/terraform"],
+      "enabled": false
     },
     {
       "description": "Guardrail files are never merged automatically",
