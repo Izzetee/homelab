@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": ["* 0-5 * * 6"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "automerge": false,
+  "platformCommit": "enabled",
+  "kubernetes": {
+    "managerFilePatterns": ["/^apps/.+\\.ya?ml$/", "/^networking/.+\\.ya?ml$/"]
+  },
+  "argocd": {
+    "managerFilePatterns": ["/^apps/.+\\.ya?ml$/", "/^networking/.+\\.ya?ml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Tool images pinned as name:tag@sha256 in workflows and CI helpers",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/", "/^ci/.+\\.sh$/"],
+      "matchStrings": [
+        "(?<depName>[a-z0-9][a-z0-9./_-]*):(?<currentValue>[A-Za-z0-9_][A-Za-z0-9._-]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Wait three days after a release before proposing a version update",
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Guardrail files are never merged automatically",
+      "matchFileNames": [".github/**", "ci/**", ".gitleaks.toml", "renovate.json"],
+      "automerge": false,
+      "addLabels": ["needs-user"]
+    },
+    {
+      "description": "Ansible collections and OpenTofu providers are never merged automatically",
+      "matchManagers": ["ansible-galaxy", "terraform"],
+      "automerge": false,
+      "addLabels": ["needs-user"]
+    }
+  ]
+}

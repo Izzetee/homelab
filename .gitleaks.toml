@@ -1,0 +1,38 @@
+title = "homelab"
+
+[extend]
+useDefault = true
+
+# A key named like a secret with any literal value, of any length. References are not literals:
+# ${NAME} without a default operator, {{ ... }} without a non-empty default(...), <angle-bracket markers>,
+# HCL references (var. local. data. module. each.), YAML true/false/null/~ and the reference keys
+# existingSecret / existingSecretName. A value that starts with $ is a literal unless it is a reference ($NAME,
+# ${NAME}): password hashes such as $2y$... or $argon2id$... count. A default with a literal (${X:-x}, ${X-x}, default('x')) is a literal.
+[[rules]]
+id = "homelab-literal-secret"
+description = "Secret-named key with a literal value"
+regex = '''(?im)(?:^|[^A-Za-z0-9_$])(?:[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)|(?:[A-Za-z0-9_.-]*[_.-])?(?:pass|pwd))["']?[ \t]*[:=][ \t]*(["']?\$\{[A-Za-z_][A-Za-z0-9_]*:?[-=][^}\n]+\}["']?|["']?\{\{[^}\n]*\|[ \t]*default\([ \t]*(?:'[^'\n]+'|"[^"\n]+"|[0-9]+)[ \t]*[,)][^}\n]*\}\}["']?|["']?\$(?:[0-9]|[A-Za-z][A-Za-z0-9-]*\$)[^\s"'#,}\]]*["']?|"[^"{$<\n][^"\n]*"|'[^'{$<\n][^'\n]*'|[^\s"'#,{}$<\[\]][^\s"'#,}\]]*)'''
+secretGroup = 1
+keywords = ["password", "passwd", "secret", "token", "api", "private", "pass", "pwd"]
+
+[[rules.allowlists]]
+description = "values that are not literals"
+regexTarget = "secret"
+regexes = [
+  '''(?i)^(?:true|false|null|~)$''',
+  '''^(?:var|local|data|module|each)\.''',
+]
+
+[[rules.allowlists]]
+description = "reference keys"
+regexTarget = "match"
+regexes = [
+  '''(?i)(?:^|[^A-Za-z0-9_])existingsecret(?:name)?["']?[ \t]*[:=]''',
+]
+
+# Ciphertext does not belong in a public repo either (SOPS, age, sealed secrets).
+[[rules]]
+id = "homelab-ciphertext"
+description = "SOPS, age or sealed-secret ciphertext"
+regex = '''(?m)ENC\[AES256_GCM,|-----BEGIN AGE ENCRYPTED FIL[E]-----|^sops:|kind:[ \t]*SealedSecret'''
+keywords = ["enc[aes256_gcm,", "age encrypted", "sops:", "sealedsecret"]

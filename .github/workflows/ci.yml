@@ -1,0 +1,187 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  secrets:
+    name: secrets
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Select the scan config
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # a PR cannot weaken its own scan: pull requests use the config of their base commit
+          if [[ $EVENT == pull_request ]]; then
+            git show "$BASE_SHA:.gitleaks.toml" >"$RUNNER_TEMP/gitleaks.toml"
+          else
+            cp .gitleaks.toml "$RUNNER_TEMP/gitleaks.toml"
+          fi
+          chmod 644 "$RUNNER_TEMP/gitleaks.toml"
+      - name: gitleaks
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          opts=()
+          if [[ $EVENT == pull_request ]]; then
+            opts=(--log-opts="$BASE_SHA..HEAD")
+          fi
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -v "$RUNNER_TEMP:/cfg" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git --config /cfg/gitleaks.toml --redact --no-banner ${opts[@]+"${opts[@]}"} /repo
+      - name: Self-test of the custom rules
+        run: ci/gitleaks-selftest.sh .gitleaks.toml
+
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: yamllint
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/code" -w /code pipelinecomponents/yamllint:0.35.27@sha256:f7f7b4f8824839e33690a880dbe20944128b0dc9c55522a0b92a29b3a905cecf yamllint -c .yamllint.yaml .
+      - name: actionlint
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+      - name: zizmor
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d --offline .github/workflows
+      - name: Workflow hygiene
+        run: ci/check-workflows.sh
+      - name: Renovate config
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator ghcr.io/renovatebot/renovate:44.227.4@sha256:fe058db9710840a4821f20190b3769e3ce709a049b8640aa2bf5f044969fe702 --strict renovate.json
+
+  kubernetes:
+    name: kubernetes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: kustomize and kubeconform
+        run: |
+          set -euo pipefail
+          : >"$RUNNER_TEMP/rendered.yaml"
+          mapfile -t dirs < <(find . -name kustomization.yaml -not -path './.git/*' -not -path './.github/*' -printf '%h\n' | sort)
+          if [[ ${#dirs[@]} -eq 0 ]]; then
+            echo "SKIP kustomize no files"
+            exit 0
+          fi
+          for d in "${dirs[@]}"; do
+            docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work registry.k8s.io/kustomize/kustomize:v5.8.3@sha256:429eda4a1c76a7de458d0c4ca3ded9b5d764899ff6bdaeccc1d98b1b6ee873e4 build "$d" >"$RUNNER_TEMP/one.yaml"
+            docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e -strict -summary -kubernetes-version 1.34.0 -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/89c736bdde38b5fecd0f8436ec5f3aa3679a3b86/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' - <"$RUNNER_TEMP/one.yaml"
+            cat "$RUNNER_TEMP/one.yaml" >>"$RUNNER_TEMP/rendered.yaml"
+            echo "---" >>"$RUNNER_TEMP/rendered.yaml"
+          done
+      - name: helm template
+        run: |
+          set -euo pipefail
+          mapfile -t charts < <(find . -name Chart.yaml -not -path './.git/*' -printf '%h\n' | sort)
+          if [[ ${#charts[@]} -eq 0 ]]; then
+            echo "SKIP helm no files"
+            exit 0
+          fi
+          for c in "${charts[@]}"; do
+            docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work alpine/helm:4.3.1@sha256:e3f8d5c462d75470fbb1fce79ad5c20063657096d1f98c0fcea869e2600e2e5e template "$c" >"$RUNNER_TEMP/one.yaml"
+            docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e -strict -summary -kubernetes-version 1.34.0 - <"$RUNNER_TEMP/one.yaml"
+            cat "$RUNNER_TEMP/one.yaml" >>"$RUNNER_TEMP/rendered.yaml"
+            echo "---" >>"$RUNNER_TEMP/rendered.yaml"
+          done
+      - name: Image digests and architectures
+        run: |
+          set -euo pipefail
+          if [[ -s $RUNNER_TEMP/rendered.yaml ]]; then
+            ci/check-images.sh "$RUNNER_TEMP/rendered.yaml"
+          else
+            echo "SKIP images no files"
+          fi
+
+  ansible:
+    name: ansible
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ansible-lint
+        run: |
+          set -euo pipefail
+          if [[ -z $(find ansible -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | head -1) ]]; then
+            echo "SKIP ansible no files"
+            exit 0
+          fi
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work/ansible --entrypoint ansible-lint ghcr.io/ansible/community-ansible-dev-tools:v26.11.0@sha256:f9caf58a32195c1c2d23cd2ef7f465bc89dd1c6adffa44cd144689b1d41a575a .
+
+  tofu:
+    name: tofu
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: tofu fmt
+        run: |
+          set -euo pipefail
+          if [[ ! -d tofu ]]; then
+            echo "SKIP tofu no files"
+            exit 0
+          fi
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 fmt -check -recursive tofu/
+      - name: tofu validate
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          envs=(tofu/envs/*/)
+          if [[ ${#envs[@]} -eq 0 ]]; then
+            echo "SKIP tofu validate no files"
+            exit 0
+          fi
+          for d in "${envs[@]}"; do
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 init -backend=false -lockfile=readonly -input=false
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 validate
+          done
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [secrets, lint, kubernetes, ansible, tofu]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          for r in $RESULTS; do
+            if [[ $r != success ]]; then
+              echo "FAIL a required job ended with: $r"
+              exit 1
+            fi
+          done
+          echo "OK ci-ok"

@@ -1,0 +1,11 @@
+# secrets and local state never enter the repo
+.env*
+*.tfvars
+*.auto.tfvars
+*.tfstate*
+kubeconfig*
+*.pem
+*.key
+# OpenTofu working files
+.terraform/
+*.tfplan
