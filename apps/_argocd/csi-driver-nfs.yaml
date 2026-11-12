@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: csi-driver-nfs
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: csi-driver-nfs
+  sources:
+    - repoURL: https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+      chart: csi-driver-nfs
+      targetRevision: 4.13.6
+      helm:
+        releaseName: csi-driver-nfs
+        valueFiles:
+          - $values/apps/platform/csi-driver-nfs/values.yaml
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

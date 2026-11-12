@@ -1,0 +1,9 @@
+# Same provisioner as the default `local-path` class (the pinned add-on copy), but the volume outlives its claim.
+# For databases and everything that must survive a mistaken delete.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path-retain
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

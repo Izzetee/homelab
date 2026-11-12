@@ -56,5 +56,8 @@ hubble:
         requests:
           cpu: 10m
           memory: 32Mi
+# The chart creates the namespace for the secrets Cilium syncs for Gateway API; it holds no pod, so it is restricted.
+secretsNamespaceLabels:
+  pod-security.kubernetes.io/enforce: restricted
 image:
   useDigest: true

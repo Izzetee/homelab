@@ -1,0 +1,39 @@
+# Let's Encrypt, DNS-01 at Cloudflare. The API token comes from the Secret `cloudflare-dns01` (key `api-token`) that the
+# cluster bootstrap creates; it is not in this repository. No ACME contact address is registered.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - selector:
+          dnsZones:
+            - chill-town.de
+        dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-dns01
+              key: api-token
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - selector:
+          dnsZones:
+            - chill-town.de
+        dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-dns01
+              key: api-token

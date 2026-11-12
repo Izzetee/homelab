@@ -1,0 +1,18 @@
+# NFS share of the cluster on the NAS. The export lists the three VM nodes only, so a pod that mounts it must run on one
+# of them. NFSv4.0 with hard mounts; the volume and its data outlive the claim.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-k3s-data
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: 192.168.1.117
+  share: /volume1/k3s-data
+  subDir: ${pvc.metadata.namespace}/${pvc.metadata.name}
+  onDelete: retain
+volumeBindingMode: Immediate
+reclaimPolicy: Retain
+mountOptions:
+  - nfsvers=4.0
+  - hard
+  - proto=tcp

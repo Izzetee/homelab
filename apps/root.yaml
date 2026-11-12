@@ -1,0 +1,16 @@
+# The root app-of-apps: the Applications of apps/_argocd. Neither it nor its children sync automatically yet; the first sync
+# is started by hand, wave by wave, after the diff of each was read.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Izzetee/homelab.git
+    targetRevision: main
+    path: apps/_argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd

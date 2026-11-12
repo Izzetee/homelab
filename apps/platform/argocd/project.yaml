@@ -1,0 +1,51 @@
+# The projects of the cluster. The bootstrap applies this file once; the `argocd` Application owns it afterwards.
+# `platform` may read this repository and the pinned chart repositories and deploy into this cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster platform (networking, certificates, storage, operators, ingress tunnel)
+  sourceRepos:
+    - https://github.com/Izzetee/homelab.git
+    - https://github.com/kubernetes-sigs/gateway-api.git
+    - https://helm.cilium.io
+    - https://argoproj.github.io/argo-helm
+    - https://charts.jetstack.io
+    - https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+    - https://cloudnative-pg.github.io/charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: "*"
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: "*"
+    - group: storage.k8s.io
+      kind: "*"
+    - group: admissionregistration.k8s.io
+      kind: "*"
+    - group: apiregistration.k8s.io
+      kind: APIService
+    - group: scheduling.k8s.io
+      kind: PriorityClass
+    - group: cilium.io
+      kind: "*"
+    - group: gateway.networking.k8s.io
+      kind: GatewayClass
+    - group: cert-manager.io
+      kind: ClusterIssuer
+---
+# Nothing may use the default project: no source, no destination.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: []
+  destinations: []

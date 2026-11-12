@@ -1,0 +1,7 @@
+# No pod runs in this namespace (the proxy belongs to Cilium); restricted keeps it that way.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

@@ -1,0 +1,40 @@
+# The one gateway of the cluster, on a fixed load balancer address.
+# - `tunnel` (port 80) is the only listener the cloudflared tunnel targets; a route attaches to it only from a namespace
+#   labelled homelab.io/public=true, so a route without sectionName in any other namespace never reaches it.
+# - `lan` (port 443) serves *.lan.chill-town.de with the wildcard certificate; routes for LAN-only names attach to it
+#   with `sectionName: lan`.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: homelab
+  namespace: gateway
+spec:
+  gatewayClassName: cilium
+  addresses:
+    - type: IPAddress
+      value: 192.168.1.3
+  infrastructure:
+    annotations:
+      io.cilium/lb-ipam-ips: 192.168.1.3
+  listeners:
+    - name: tunnel
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              homelab.io/public: "true"
+    - name: lan
+      protocol: HTTPS
+      port: 443
+      hostname: "*.lan.chill-town.de"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: lan-wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: All
