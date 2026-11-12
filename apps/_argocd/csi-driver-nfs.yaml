@@ -22,6 +22,9 @@ spec:
       targetRevision: main
       ref: values
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
     managedNamespaceMetadata:
       labels:
         pod-security.kubernetes.io/enforce: privileged
