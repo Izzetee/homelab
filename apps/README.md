@@ -22,9 +22,8 @@ Layout:
   (`privileged`: the node plugin mounts volumes through host paths), `node-exporter` (`privileged`: host metrics need the host
   network, the host PID namespace and read-only host paths; it holds only the node-exporter DaemonSet) and `kube-system`
   (exempt cluster-wide: Cilium).
-- Every Application of the platform, the root included, syncs automatically with self-heal and without pruning: a manifest removed
-  from Git shows as out of sync until the object is removed by hand (see below). The observability Applications (waves 2 to 5,
-  project `observability`) are synced by hand, wave by wave, after the diff of each was read.
+- Every Application, the root included, syncs automatically with self-heal and without pruning: a manifest removed from Git
+  shows as out of sync until the object is removed by hand (see below).
 
 Removing the platform. The child Applications have no deletion finalizer, so deleting the root with a cascade or
 without removes only the Application objects, never their workloads, and a child deleted without a cascade is left
@@ -64,8 +63,9 @@ as destinations):
 - Alert rules: `observability/config/rules/homelab-rules.yaml`, unit tests in `observability/config/rules/tests/` (promtool,
   outside the kustomization). Dashboards of the chart are the defaults for the scraped components; `homelab-overview` is ours.
 - Traces: send OTLP to `alloy.monitoring.svc:4317` (gRPC) or `:4318` (HTTP); Alloy forwards them to Tempo.
-- The first sync of each Application is done by hand: `argocd app diff --core <app>`, then namespaces first, then the CRDs of
-  `kube-prometheus-stack` (wait until they are `Established`), then the rest of each Application.
+- A first sync of the stack on a new cluster is done by hand, wave by wave: `argocd app diff --core <app>`, namespaces first, then the
+  CRDs of `kube-prometheus-stack` (wait until they are `Established`), then the rest of each Application; the Applications sync
+  automatically from then on.
 
 Removing the observability stack. Work from the top while ArgoCD still runs, so that nothing re-creates what is deleted:
 
