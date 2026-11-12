@@ -20,7 +20,8 @@ Layout:
 - The load balancer pool and the L2 policy live in `../networking/`.
 - Namespaces carry an explicit Pod Security `enforce` label: `restricted` everywhere (including `cilium-secrets`, which the Cilium chart creates and which holds no pod) except `csi-driver-nfs`
   (`privileged`: the node plugin mounts volumes through host paths) and `kube-system` (exempt cluster-wide: Cilium).
-- Automated sync is added by a later pull request, after every Application was synced once by hand.
+- Every Application, the root included, syncs automatically with self-heal and without pruning: a manifest removed from Git
+  shows as out of sync until the object is removed by hand (see below).
 
 Removing the platform. The child Applications have no deletion finalizer, so deleting the root with a cascade or
 without removes only the Application objects, never their workloads, and a child deleted without a cascade is left
