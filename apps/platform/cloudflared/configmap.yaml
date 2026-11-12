@@ -1,0 +1,11 @@
+# One catch-all rule: every request that arrives through the tunnel goes to the `tunnel` listener of the gateway. Which
+# names exist is decided by DNS records and HTTPRoutes, so this file never changes for a new application.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared
+  namespace: cloudflared
+data:
+  config.yaml: |
+    ingress:
+      - service: http://cilium-gateway-homelab.gateway.svc.cluster.local:80

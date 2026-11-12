@@ -1,0 +1,50 @@
+# cloudflared may talk to cluster DNS, to the gateway and to the internet outside the private ranges (the tunnel
+# connects out on 7844, the update and API endpoints use 443). Nothing may connect to it, and it cannot reach any
+# other address of the LAN.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: cloudflared
+  namespace: cloudflared
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  ingress:
+    - {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # the gateway's proxy answers for the Service address of the Gateway on its own identity
+    - toEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+    - toServices:
+        - k8sService:
+            namespace: gateway
+            serviceName: cilium-gateway-homelab
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+      toPorts:
+        - ports:
+            - port: "7844"
+              protocol: TCP
+            - port: "7844"
+              protocol: UDP
+            - port: "443"
+              protocol: TCP

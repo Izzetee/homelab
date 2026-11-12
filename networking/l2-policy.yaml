@@ -1,0 +1,14 @@
+# The amd64 VM nodes answer ARP for the load balancer addresses on their LAN interface (ens18 on every VM).
+# Load balancer addresses only, never external IPs.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: lan
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/arch: amd64
+  interfaces:
+    - ^ens18$
+  loadBalancerIPs: true
+  externalIPs: false

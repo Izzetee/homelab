@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gateway-api.yaml
+  - cilium.yaml
+  - cert-manager.yaml
+  - csi-driver-nfs.yaml
+  - cloudnative-pg.yaml
+  - storage.yaml
+  - networking.yaml
+  - cert-manager-issuers.yaml
+  - gateway.yaml
+  - cloudflared.yaml
+  - argocd.yaml
