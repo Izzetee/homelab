@@ -29,9 +29,11 @@
     helm_release_version: "{{ argocd_chart_version }}"
     helm_release_values: "{{ argocd_values }}"
 
+# ArgoCD creates a permissive `default` AppProject at its first start and owns its fields; the project file replaces them
+# with an empty one, so conflicts are forced (the file is the intended state).
 - name: "Diff against the cluster"
   ansible.builtin.command:
-    argv: [kubectl, diff, --server-side, --filename, "{{ item }}"]
+    argv: [kubectl, diff, --server-side, --force-conflicts, --filename, "{{ item }}"]
   register: argocd_bootstrap_diff
   changed_when: argocd_bootstrap_diff.rc == 1
   failed_when: argocd_bootstrap_diff.rc > 1
@@ -50,7 +52,7 @@
 
 - name: "Apply the AppProject and the root server-side"
   ansible.builtin.command:
-    argv: [kubectl, apply, --server-side, --field-manager=argocd-bootstrap, --filename, "{{ item.item }}"]
+    argv: [kubectl, apply, --server-side, --force-conflicts, --field-manager=argocd-bootstrap, --filename, "{{ item.item }}"]
   changed_when: true
   loop: "{{ argocd_bootstrap_diff.results }}"
   loop_control:
