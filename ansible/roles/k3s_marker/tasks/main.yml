@@ -1,0 +1,34 @@
+---
+# A root-only marker says "K3s must be (re)started": it is written BEFORE the first write that a K3s start has to pick up
+# (token drop-in, configuration, binary) and removed only after a restart was verified (tasks_from: finish). A run that is
+# interrupted in between leaves it, so the next run restarts K3s even though every file already looks right. The state
+# before this run is kept in k3s_marker_existed for the role k3s_detect.
+- name: Was a restart left pending by an earlier run
+  ansible.builtin.stat:
+    path: "{{ k3s_restart_marker }}"
+  register: k3s_marker_before
+  check_mode: false
+
+- name: Remember it
+  # noqa var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    k3s_marker_existed: "{{ k3s_marker_before.stat.exists }}"
+
+- name: Directory of the marker
+  ansible.builtin.file:
+    path: "{{ k3s_restart_marker | dirname }}"
+    state: directory
+    owner: "{{ k3s_marker_owner }}"
+    group: "{{ k3s_marker_group }}"
+    mode: "0700"
+  when: not ansible_check_mode
+
+- name: Mark a restart as pending (before anything is written)
+  ansible.builtin.copy:
+    dest: "{{ k3s_restart_marker }}"
+    content: "pending\n"
+    owner: "{{ k3s_marker_owner }}"
+    group: "{{ k3s_marker_group }}"
+    mode: "0600"
+  changed_when: false # bookkeeping: it must not turn an unchanged run into a changed one
+  when: not ansible_check_mode

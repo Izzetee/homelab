@@ -1,0 +1,5 @@
+---
+argocd_chart_version: 10.18.0
+argocd_values: "{{ playbook_dir }}/../apps/platform/argocd/values.yaml"
+argocd_project: "{{ playbook_dir }}/../apps/platform/argocd/project.yaml"
+argocd_root: "{{ playbook_dir }}/../apps/root.yaml"

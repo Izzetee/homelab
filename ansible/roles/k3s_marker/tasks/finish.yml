@@ -1,0 +1,19 @@
+---
+# After the roles of the collection: when K3s was (re)started, wait until the service is active, then clear the marker.
+# A run that needed nothing clears the marker it wrote at the start. Check mode changes nothing.
+- name: The K3s service is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ k3s_unit }}"]
+  register: k3s_marker_active
+  until: k3s_marker_active.rc == 0
+  retries: 20
+  delay: 6
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Clear the marker (the pending restart is done or was never needed)
+  ansible.builtin.file:
+    path: "{{ k3s_restart_marker }}"
+    state: absent
+  changed_when: false # bookkeeping
+  when: not ansible_check_mode

@@ -1,0 +1,58 @@
+---
+# ArgoCD from its pinned chart with the values file ArgoCD later syncs (the Application health check is in it, so it is
+# in place before the root app exists), then the AppProject `platform` and the root app-of-apps. The root and every child
+# have no automated sync yet: the first sync is by hand after a recorded `argocd app diff --core`.
+- name: The AppProject and the root exist in this checkout
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: ["{{ argocd_project }}", "{{ argocd_root }}"]
+  register: argocd_bootstrap_files
+  delegate_to: localhost
+
+- name: Both files are present (merge the platform pull request first)
+  ansible.builtin.assert:
+    that: item.stat.exists
+    quiet: true
+    fail_msg: "{{ item.item }} is missing at this commit"
+  loop: "{{ argocd_bootstrap_files.results }}"
+  loop_control:
+    label: "{{ item.item | basename }}"
+
+- name: The ArgoCD release
+  ansible.builtin.include_role:
+    name: helm_release
+  vars:
+    helm_release_name: argocd
+    helm_release_namespace: argocd
+    helm_release_chart: argo-cd
+    helm_release_repo: https://argoproj.github.io/argo-helm
+    helm_release_version: "{{ argocd_chart_version }}"
+    helm_release_values: "{{ argocd_values }}"
+
+- name: "Diff against the cluster"
+  ansible.builtin.command:
+    argv: [kubectl, diff, --server-side, --filename, "{{ item }}"]
+  register: argocd_bootstrap_diff
+  changed_when: argocd_bootstrap_diff.rc == 1
+  failed_when: argocd_bootstrap_diff.rc > 1
+  check_mode: false
+  loop: ["{{ argocd_project }}", "{{ argocd_root }}"]
+  loop_control:
+    label: "{{ item | basename }}"
+  # a dry-run before the first install has no CRDs yet: nothing to diff against
+  when: helm_release_current | bool or not ansible_check_mode
+
+- name: The AppProject and the root follow the first install
+  ansible.builtin.debug:
+    msg: "the release is not installed yet: the AppProject and the root will be applied after it"
+  changed_when: true
+  when: ansible_check_mode and not helm_release_current | bool
+
+- name: "Apply the AppProject and the root server-side"
+  ansible.builtin.command:
+    argv: [kubectl, apply, --server-side, --field-manager=argocd-bootstrap, --filename, "{{ item.item }}"]
+  changed_when: true
+  loop: "{{ argocd_bootstrap_diff.results }}"
+  loop_control:
+    label: "{{ item.item | basename }}"
+  when: item.changed | default(false) and not ansible_check_mode

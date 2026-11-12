@@ -1,0 +1,9 @@
+---
+# Agents join with the token from the environment of the playbook run (never a file in this repository).
+# The server gets the same token from a drop-in written by a no_log task (k3s-cluster.yml), not from here.
+token: "{{ lookup('env', 'K3S_TOKEN') }}"
+# the collection writes agent_config_yaml verbatim
+k3s_config_content: "{{ agent_config_yaml }}"
+# an agent also needs its token in the environment file of the unit
+k3s_detect_token_file: /etc/systemd/system/k3s-agent.service.env
+k3s_unit: k3s-agent

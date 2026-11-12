@@ -1,0 +1,60 @@
+# Cilium for the K3s cluster. The bootstrap playbook (ansible/cilium.yml) and ArgoCD install the same chart version
+# with this file. No externalIPs (not needed for LB IPAM, avoids the external-IP hijack class), no `devices` (if it is
+# ever set it must include the interface the L2 announcements use).
+kubeProxyReplacement: true
+k8sServiceHost: 192.168.1.81
+k8sServicePort: 6443
+k8sClientRateLimit:
+  qps: 20
+  burst: 40
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - 10.42.0.0/16
+    clusterPoolIPv4MaskSize: 24
+l2announcements:
+  enabled: true
+gatewayAPI:
+  enabled: true
+operator:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+envoy:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+hubble:
+  enabled: true
+  tls:
+    auto:
+      enabled: true
+      method: cronJob
+  relay:
+    enabled: true
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+  ui:
+    enabled: true
+    frontend:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+    backend:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+image:
+  useDigest: true

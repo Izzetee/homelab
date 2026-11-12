@@ -18,3 +18,4 @@ rules:
 ignore: |
   .git/
   .terraform/
+  ansible/files/k3s-addons/

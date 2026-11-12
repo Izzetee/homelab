@@ -1,0 +1,21 @@
+---
+# Bootstrap Secrets: values only from the environment, only on stdin of kubectl, never in an argument, a diff or the
+# output (no_log on every task that touches a value). Server-side apply keeps the value out of a
+# last-applied-configuration annotation. The label homelab.io/bootstrap=true lets the secret store iteration find and
+# replace them. Every value must be set before anything is created.
+- name: Every value is in the environment (nothing is created otherwise)
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.env', item.env) | length > 0
+    quiet: true
+  loop: "{{ secret_bootstrap_secrets }}"
+  loop_control:
+    label: "{{ item.namespace }}/{{ item.name }}"
+  no_log: true
+
+- name: Namespaces and Secrets
+  ansible.builtin.include_tasks: one.yml
+  loop: "{{ secret_bootstrap_secrets }}"
+  loop_control:
+    loop_var: secret_bootstrap_item
+    label: "{{ secret_bootstrap_item.namespace }}/{{ secret_bootstrap_item.name }}"

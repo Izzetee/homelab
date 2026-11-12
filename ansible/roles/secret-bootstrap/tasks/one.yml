@@ -1,0 +1,69 @@
+---
+- name: "Does the namespace exist"
+  ansible.builtin.command:
+    argv: [kubectl, get, namespace, "{{ secret_bootstrap_item.namespace }}", --output, name]
+  register: secret_bootstrap_ns
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Create the namespace with Pod Security restricted"
+  ansible.builtin.command:
+    argv: [kubectl, apply, --server-side, --field-manager=secret-bootstrap, --filename, "-"]
+    stdin: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: {{ secret_bootstrap_item.namespace }}
+        labels:
+          pod-security.kubernetes.io/enforce: restricted
+  changed_when: true
+  when: secret_bootstrap_ns.rc != 0 and not ansible_check_mode
+
+- name: "Read the current value (it stays in the registered variable)"
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - get
+      - secret
+      - "{{ secret_bootstrap_item.name }}"
+      - --namespace
+      - "{{ secret_bootstrap_item.namespace }}"
+      - --output
+      - "jsonpath={.data.{{ secret_bootstrap_item.key }}}"
+  register: secret_bootstrap_current
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Is the Secret missing or different?
+  ansible.builtin.set_fact:
+    secret_bootstrap_needed: >-
+      {{ secret_bootstrap_current.rc != 0
+         or (secret_bootstrap_current.stdout | b64decode) != lookup('ansible.builtin.env', secret_bootstrap_item.env) }}
+  no_log: true
+
+- name: "Report a missing or different Secret"
+  ansible.builtin.debug:
+    msg: >-
+      {{ secret_bootstrap_item.namespace }}/{{ secret_bootstrap_item.name }}
+      {{ 'differs or is missing' if secret_bootstrap_needed | bool else 'is current' }}
+  changed_when: secret_bootstrap_needed | bool
+  when: ansible_check_mode
+
+- name: "Create or update the Secret (value on stdin)"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      kubectl create secret generic {{ secret_bootstrap_item.name }} \
+        --namespace {{ secret_bootstrap_item.namespace }} \
+        --from-file={{ secret_bootstrap_item.key }}=/dev/stdin --dry-run=client --output yaml \
+        | kubectl label --local --filename - homelab.io/bootstrap=true --output yaml \
+        | kubectl apply --server-side --field-manager=secret-bootstrap --filename -
+    executable: /bin/bash
+    stdin: "{{ lookup('ansible.builtin.env', secret_bootstrap_item.env) }}"
+    stdin_add_newline: false
+  changed_when: true
+  no_log: true
+  when: secret_bootstrap_needed | bool and not ansible_check_mode

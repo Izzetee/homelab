@@ -1,0 +1,9 @@
+---
+# The role names node-prep, secret-bootstrap and argocd-bootstrap are fixed by the playbook contract
+skip_list:
+  - role-name
+# the pinned K3s add-on manifests are generated from upstream files (kept as rendered); psa.yaml is a Kubernetes file
+exclude_paths:
+  - files/k3s-addons/
+  - roles/node-prep/files/
+  - .ansible/
