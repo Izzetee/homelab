@@ -1,0 +1,399 @@
+# kube-prometheus-stack (chart pinned in the Application): Prometheus, Alertmanager, kube-state-metrics, node-exporter and
+# Grafana (the chart's own Grafana subchart). Everything but node-exporter runs in `monitoring` (Pod Security `restricted`);
+# node-exporter runs in `node-exporter` because it needs the host network, the host PID namespace and read-only host
+# paths. Images are pinned `tag@digest` (the `sha` fields hold the digest without the `sha256:` prefix).
+crds:
+  enabled: true
+  upgradeJob:
+    enabled: false
+
+# Rules for components this cluster does not scrape (K3s binds them to localhost or has replaced them) are left out.
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    windows: false
+
+# the cluster components without a scrape target
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+# CoreDNS is scraped by a ServiceMonitor in apps/observability/config
+coreDns:
+  enabled: false
+
+alertmanager:
+  # Warning and critical alerts go to Discord; the webhook URL is read from a file of the Secret `alertmanager-receiver`
+  # (mounted below), it never appears in this repository.
+  config:
+    global:
+      resolve_timeout: 5m
+    inhibit_rules:
+      - source_matchers:
+          - 'severity = critical'
+        target_matchers:
+          - 'severity =~ warning|info'
+        equal:
+          - namespace
+          - alertname
+      - source_matchers:
+          - 'severity = warning'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - namespace
+          - alertname
+      - source_matchers:
+          - 'alertname = InfoInhibitor'
+        target_matchers:
+          - 'severity = info'
+        equal:
+          - namespace
+      - target_matchers:
+          - 'alertname = InfoInhibitor'
+    route:
+      receiver: "null"
+      group_by:
+        - alertname
+        - namespace
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: "null"
+          matchers:
+            - 'alertname =~ "Watchdog|InfoInhibitor"'
+        - receiver: "null"
+          matchers:
+            - 'severity = info'
+        - receiver: discord
+          matchers:
+            - 'severity =~ "warning|critical"'
+    receivers:
+      - name: "null"
+      - name: discord
+        discord_configs:
+          - webhook_url_file: /etc/alertmanager/secrets/alertmanager-receiver/webhook-url
+            send_resolved: true
+    templates:
+      - /etc/alertmanager/config/*.tmpl
+  alertmanagerSpec:
+    image:
+      tag: v0.35.0
+      sha: 5f6e66c01bd610aef6dd671642a52eee775fd3a89bd8788ebada33efaf373d10
+    secrets:
+      - alertmanager-receiver
+    retention: 120h
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 96Mi
+
+grafana:
+  image:
+    tag: 13.3.1-distroless
+    sha: 54e297ac67e2b72572f926892f4e06074dc4f79f2a56ed9a9ca9a88a46f28733
+  # the admin account comes from the bootstrap Secret `grafana-admin` (keys admin-user and admin-password)
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  persistence:
+    enabled: false
+  initChownData:
+    enabled: false
+  testFramework:
+    enabled: false
+  plugins: []
+  defaultDashboardsEditable: false
+  # no cluster-wide access and no Secret access: the sidecars read ConfigMaps of this namespace only, through the Role
+  # `grafana-sidecar` of apps/observability/base
+  rbac:
+    pspEnabled: false
+    namespaced: true
+    useExistingRole: grafana-sidecar
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+  sidecar:
+    image:
+      tag: 2.14.3
+      sha: 52d311dcedd587421a236c4d6c621f05614c40a51386e955e0699dca97ec0880
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi
+    dashboards:
+      searchNamespace: monitoring
+      resource: configmap
+    datasources:
+      searchNamespace: monitoring
+      resource: configmap
+  grafana.ini:
+    server:
+      domain: grafana.lan.chill-town.de
+      root_url: https://grafana.lan.chill-town.de
+    security:
+      cookie_secure: true
+      allow_embedding: false
+      disable_gravatar: true
+    users:
+      allow_sign_up: false
+      allow_org_create: false
+    auth.anonymous:
+      enabled: false
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+      check_for_plugin_updates: false
+      feedback_links_enabled: false
+    news:
+      news_feed_enabled: false
+    plugins:
+      plugin_admin_enabled: false
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc:3100
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc:3200
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: -5m
+          spanEndTimeShift: 5m
+          tags:
+            - key: k8s.namespace.name
+              value: namespace
+            - key: k8s.pod.name
+              value: pod
+
+kube-state-metrics:
+  image:
+    tag: v2.20.0
+    sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  # no `secrets` collector: nothing here may read Secrets
+  collectors:
+    - certificatesigningrequests
+    - configmaps
+    - cronjobs
+    - daemonsets
+    - deployments
+    - endpointslices
+    - horizontalpodautoscalers
+    - ingresses
+    - jobs
+    - leases
+    - limitranges
+    - mutatingwebhookconfigurations
+    - namespaces
+    - networkpolicies
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicasets
+    - replicationcontrollers
+    - resourcequotas
+    - services
+    - statefulsets
+    - storageclasses
+    - validatingwebhookconfigurations
+    - volumeattachments
+  metricLabelsAllowlist:
+    - pods=[cnpg.io/cluster]
+    - cronjobs=[homelab.io/backup]
+  rbac:
+    extraRules:
+      - apiGroups: ["argoproj.io"]
+        resources: ["applications"]
+        verbs: ["list", "watch"]
+      - apiGroups: ["k3s.cattle.io"]
+        resources: ["etcdsnapshotfiles"]
+        verbs: ["list", "watch"]
+  customResourceState:
+    enabled: true
+    config:
+      kind: CustomResourceStateMetrics
+      spec:
+        resources:
+          - groupVersionKind:
+              group: argoproj.io
+              version: v1alpha1
+              kind: Application
+            metricNamePrefix: homelab_argocd_app
+            labelsFromPath:
+              name: [metadata, name]
+              project: [spec, project]
+            metrics:
+              - name: health_status
+                help: Health of an ArgoCD Application (1 for the current status)
+                each:
+                  type: StateSet
+                  stateSet:
+                    labelName: health_status
+                    path: [status, health, status]
+                    list: [Healthy, Progressing, Degraded, Suspended, Missing, Unknown]
+              - name: sync_status
+                help: Sync status of an ArgoCD Application (1 for the current status)
+                each:
+                  type: StateSet
+                  stateSet:
+                    labelName: sync_status
+                    path: [status, sync, status]
+                    list: [Synced, OutOfSync, Unknown]
+          - groupVersionKind:
+              group: k3s.cattle.io
+              version: v1
+              kind: ETCDSnapshotFile
+            metricNamePrefix: homelab_etcd_snapshot
+            labelsFromPath:
+              name: [metadata, name]
+            metrics:
+              - name: created_timestamp_seconds
+                help: Creation time of a K3s etcd snapshot
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [status, creationTime]
+              - name: ready
+                help: 1 when the snapshot file is ready to use
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [status, readyToUse]
+
+# host metrics: the exporter listens on 127.0.0.1 only, kube-rbac-proxy serves it on 9100 over TLS and checks the caller's
+# token against the API server; Prometheus scrapes with its service account token
+prometheus-node-exporter:
+  namespaceOverride: node-exporter
+  image:
+    tag: v1.12.1
+    digest: sha256:8c9bac11973b94b59be88d6e11fee4429aa743c8846cdc75d65b18db33f6a106
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+  kubeRBACProxy:
+    enabled: true
+    image:
+      tag: v0.23.1
+      sha: c280684dd23793fb2f287d1f4efc84b7800b3e01205d770b98694827bfe514cb
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+  prometheus:
+    monitor:
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        insecureSkipVerify: true
+
+prometheusOperator:
+  # invalid rules are caught by `scripts/obs-rules-test.sh` before a push and reported by the operator's own alert
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+  image:
+    tag: v0.95.2
+    sha: 7986c2afa118c9dea07d01c5e1a29555824582e92f6ee8607591d1a7178acf29
+  prometheusConfigReloader:
+    image:
+      tag: v0.95.2
+      sha: cc74ddedad4ab1c49446971f6d51302ad4303d8660a2018af925c7f62c114304
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        memory: 32Mi
+  thanosImage:
+    tag: v0.42.5
+    sha: 0a546b98a8dd47735456ab389983675ee363d68127e334937a9fceeea10da5e7
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+prometheus:
+  prometheusSpec:
+    image:
+      tag: v3.16.0-distroless
+      sha: 9764044e09eb2c9e1abdb12d0f0188d4efb7384b0262d3c080f0fc59045c89ba
+    retention: 30d
+    retentionSize: 25GB
+    # objects of the two namespaces are selected without a release label
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [monitoring, node-exporter]
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    probeSelectorNilUsesHelmValues: false
+    probeNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    scrapeConfigSelectorNilUsesHelmValues: false
+    scrapeConfigNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    nodeSelector:
+      kubernetes.io/os: linux
+      kubernetes.io/hostname: k3s-agent-1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 984Mi
+      limits:
+        memory: 2496Mi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 30Gi

@@ -1,0 +1,15 @@
+# `monitoring` holds every observability workload and enforces the restricted Pod Security profile. `node-exporter` holds
+# only the node-exporter DaemonSet: host metrics need the host network, the host PID namespace and read-only host paths.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-exporter
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

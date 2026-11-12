@@ -1,0 +1,10 @@
+# What the Grafana sidecars may read: ConfigMaps of this namespace (dashboards and datasources), nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana-sidecar
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]

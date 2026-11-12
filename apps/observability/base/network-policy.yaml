@@ -1,0 +1,27 @@
+# Ingress to every pod of `monitoring`: from pods of `monitoring`; from the gateway to Grafana (3000); from cluster
+# endpoints to the Alloy OTLP ports (4317, 4318). Everything else is dropped; egress stays open (scrapes, probes, Discord).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    - fromEntities:
+        - cluster
+      toPorts:
+        - ports:
+            - port: "4317"
+              protocol: TCP
+            - port: "4318"
+              protocol: TCP
