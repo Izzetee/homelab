@@ -79,6 +79,10 @@ resource "proxmox_virtual_environment_vm" "this" {
   serial_device {}
 
   lifecycle {
+    # the pool is set when the VM is created; the API does not report it back, so the state reads it as
+    # empty and every plan would show a change of the pool
+    ignore_changes = [pool_id]
+
     precondition {
       condition     = var.vm_id != 100
       error_message = "VMID 100 is the Home Assistant VM and is never managed here."
