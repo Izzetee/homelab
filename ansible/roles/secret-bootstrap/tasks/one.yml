@@ -20,28 +20,25 @@
   changed_when: true
   when: secret_bootstrap_ns.rc != 0 and not ansible_check_mode
 
-- name: "Read the current value (it stays in the registered variable)"
+- name: "Read the current Secret (it stays in the registered variable)"
   ansible.builtin.command:
-    argv:
-      - kubectl
-      - get
-      - secret
-      - "{{ secret_bootstrap_item.name }}"
-      - --namespace
-      - "{{ secret_bootstrap_item.namespace }}"
-      - --output
-      - "jsonpath={.data.{{ secret_bootstrap_item.key }}}"
+    argv: [kubectl, get, secret, "{{ secret_bootstrap_item.name }}", --namespace, "{{ secret_bootstrap_item.namespace }}", --output, json]
   register: secret_bootstrap_current
   changed_when: false
   failed_when: false
   check_mode: false
   no_log: true
 
-- name: Is the Secret missing or different?
+- name: Is the Secret missing or different in any key?
   ansible.builtin.set_fact:
     secret_bootstrap_needed: >-
-      {{ secret_bootstrap_current.rc != 0
-         or (secret_bootstrap_current.stdout | b64decode) != lookup('ansible.builtin.env', secret_bootstrap_item.env) }}
+      {%- set have = ((secret_bootstrap_current.stdout | from_json).data | default({})) if secret_bootstrap_current.rc == 0 else {} -%}
+      {%- set diff = namespace(any=secret_bootstrap_current.rc != 0) -%}
+      {%- for k in secret_bootstrap_item['keys'] -%}
+      {%- set want = k.literal if k.literal is defined else lookup('ansible.builtin.env', k.env) -%}
+      {%- if k.key not in have or (have[k.key] | b64decode) != want -%}{%- set diff.any = true -%}{%- endif -%}
+      {%- endfor -%}
+      {{ diff.any }}
   no_log: true
 
 - name: "Report a missing or different Secret"
@@ -52,18 +49,25 @@
   changed_when: secret_bootstrap_needed | bool
   when: ansible_check_mode
 
-- name: "Create or update the Secret (value on stdin)"
+# A value goes through `printf %s "$NAME"` (a builtin: no argument list) into a process substitution, which kubectl
+# reads as a file descriptor; a literal is the fixed non-secret text of the list.
+- name: "Create or update the Secret (values on file descriptors)"
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
       kubectl create secret generic {{ secret_bootstrap_item.name }} \
         --namespace {{ secret_bootstrap_item.namespace }} \
-        --from-file={{ secret_bootstrap_item.key }}=/dev/stdin --dry-run=client --output yaml \
+      {% for k in secret_bootstrap_item['keys'] %}
+      {% if k.literal is defined %}
+        --from-literal={{ k.key }}={{ k.literal | quote }} \
+      {% else %}
+        --from-file={{ k.key }}=<(printf %s "${{ '{' }}{{ k.env }}{{ '}' }}") \
+      {% endif %}
+      {% endfor %}
+        --dry-run=client --output yaml \
         | kubectl label --local --filename - homelab.io/bootstrap=true --output yaml \
         | kubectl apply --server-side --field-manager=secret-bootstrap --filename -
     executable: /bin/bash
-    stdin: "{{ lookup('ansible.builtin.env', secret_bootstrap_item.env) }}"
-    stdin_add_newline: false
   changed_when: true
   no_log: true
   when: secret_bootstrap_needed | bool and not ansible_check_mode

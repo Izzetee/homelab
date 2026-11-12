@@ -1,16 +1,34 @@
 ---
-# Bootstrap Secrets: values only from the environment, only on stdin of kubectl, never in an argument, a diff or the
-# output (no_log on every task that touches a value). Server-side apply keeps the value out of a
-# last-applied-configuration annotation. The label homelab.io/bootstrap=true lets the secret store iteration find and
-# replace them. Every value must be set before anything is created.
-- name: Every value is in the environment (nothing is created otherwise)
+# Bootstrap Secrets: values only from the environment, only on file descriptors of kubectl, never in an argument, a
+# diff or the output (no_log on every task that touches a value). One server-side apply per Secret with all its keys, so
+# a second key never removes the first, and no last-applied-configuration annotation holds a value. The label
+# homelab.io/bootstrap=true lets the secret store iteration find and replace them. Every value must be set before
+# anything is created.
+- name: Every entry is well formed
   ansible.builtin.assert:
     that:
-      - lookup('ansible.builtin.env', item.env) | length > 0
+      - item.namespace is match('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')
+      - item.name is match('^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$')
+      - item['keys'] | length > 0
+      - item['keys'] | map(attribute='key') | unique | length == item['keys'] | length
+      - item['keys'] | map(attribute='key') | select('match', '^[A-Za-z0-9._-]+$') | list | length == item['keys'] | length
+      - item['keys'] | selectattr('env', 'defined') | map(attribute='env') | select('match', '^[A-Z][A-Z0-9_]*$') | list | length
+        == item['keys'] | selectattr('env', 'defined') | list | length
+      - (item['keys'] | selectattr('env', 'defined') | list | length) + (item['keys'] | selectattr('literal', 'defined') | list | length)
+        == item['keys'] | length
     quiet: true
   loop: "{{ secret_bootstrap_secrets }}"
   loop_control:
     label: "{{ item.namespace }}/{{ item.name }}"
+
+- name: Every value is in the environment (nothing is created otherwise)
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.env', item.1.env) | length > 0
+    quiet: true
+  loop: "{{ secret_bootstrap_secrets | subelements('keys') | selectattr('1.env', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.0.namespace }}/{{ item.0.name }}"
   no_log: true
 
 - name: Namespaces and Secrets
