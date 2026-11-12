@@ -356,7 +356,8 @@ prometheus:
       tag: v3.16.0-distroless
       sha: 9764044e09eb2c9e1abdb12d0f0188d4efb7384b0262d3c080f0fc59045c89ba
     retention: 30d
-    retentionSize: 25GB
+    # Prometheus reads GB as binary: 23GiB stays below 25 GB and leaves room on the 30 GiB volume
+    retentionSize: 23GiB
     # objects of the two namespaces are selected without a release label
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorNamespaceSelector:
