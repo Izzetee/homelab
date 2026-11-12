@@ -1,0 +1,31 @@
+---
+# The API server reads psa.yaml at start, so a change needs a K3s restart, which the next k3s-cluster run performs. The
+# restart marker is written BEFORE the file, so a run interrupted between the two still restarts on the retry: the copy is
+# first probed in check mode to learn whether it would change anything.
+- name: Server only, would the Pod Security admission configuration change
+  ansible.builtin.copy:
+    src: psa.yaml
+    dest: "{{ k3s_config_dir | default('/etc/rancher/k3s') }}/psa.yaml"
+    owner: "{{ node_prep_owner }}"
+    group: "{{ node_prep_group }}"
+    mode: "0644"
+  check_mode: true
+  register: node_prep_psa
+  when: inventory_hostname in groups['server']
+
+- name: Server only, mark a restart as pending before the admission configuration is written
+  ansible.builtin.include_role:
+    name: k3s_marker
+  when:
+    - inventory_hostname in groups['server']
+    - node_prep_psa.changed | default(false)
+    - not ansible_check_mode
+
+- name: Server only, the Pod Security admission configuration
+  ansible.builtin.copy:
+    src: psa.yaml
+    dest: "{{ k3s_config_dir | default('/etc/rancher/k3s') }}/psa.yaml"
+    owner: "{{ node_prep_owner }}"
+    group: "{{ node_prep_group }}"
+    mode: "0644"
+  when: inventory_hostname in groups['server']

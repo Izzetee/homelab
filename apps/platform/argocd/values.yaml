@@ -1,0 +1,61 @@
+# ArgoCD for the K3s cluster (chart argo-cd, pinned in the Application and in ansible/roles/argocd-bootstrap).
+# The bootstrap playbook and ArgoCD itself install the same chart version with this file.
+# Images are pinned by digest through the tag value (the chart renders <repository>:<tag>).
+global:
+  image:
+    tag: v3.6.1@sha256:296e3d74f449b2ce45265613fcb68c18ed7366488360c8ea32f5f2a93d2e5c54
+crds:
+  install: true
+  keep: true
+redis:
+  image:
+    tag: 8.6.4-alpine@sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+dex:
+  enabled: false
+notifications:
+  enabled: false
+# the app-of-apps pattern needs no ApplicationSet controller
+applicationSet:
+  replicas: 0
+configs:
+  params:
+    # TLS ends at the gateway
+    server.insecure: true
+  cm:
+    # An Application is Healthy only when it is Synced and Healthy itself, so the root app-of-apps waits for the
+    # Applications of a sync wave before it creates the next wave.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = "waiting for the application"
+      if obj.status ~= nil and obj.status.health ~= nil and obj.status.sync ~= nil then
+        if obj.status.health.status == "Healthy" and obj.status.sync.status == "Synced" then
+          hs.status = "Healthy"
+          hs.message = ""
+        elseif obj.status.health.status == "Degraded" then
+          hs.status = "Degraded"
+          hs.message = obj.status.health.message or ""
+        else
+          hs.message = "sync " .. tostring(obj.status.sync.status) .. ", health " .. tostring(obj.status.health.status)
+        end
+      end
+      return hs
+server:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi

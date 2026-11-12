@@ -1,0 +1,20 @@
+---
+# Hosts and groups only; secret inputs come from the environment (see ansible/README.md).
+# The agents are separate from the server so the first k3s-cluster run can be limited to it (--limit server).
+all:
+  vars:
+    ansible_user: k3smig
+    user_kubectl: false
+  children:
+    k3s_cluster:
+      children:
+        server:
+          hosts:
+            k3s-server-1:
+              ansible_host: 192.168.1.81
+        agent:
+          hosts:
+            k3s-agent-1:
+              ansible_host: 192.168.1.82
+            k3s-agent-2:
+              ansible_host: 192.168.1.83

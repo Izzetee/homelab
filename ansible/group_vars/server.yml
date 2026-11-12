@@ -1,0 +1,4 @@
+---
+# the collection writes exactly this content to /etc/rancher/k3s/config.yaml (to_nice_yaml of the merged dict)
+k3s_config_content: "{{ server_config_yaml | from_yaml | to_nice_yaml }}"
+k3s_unit: k3s

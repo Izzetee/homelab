@@ -1,0 +1,9 @@
+---
+# ArgoCD and the root app-of-apps from the bastion (localhost, against the kubeconfig there). No secret is involved.
+# `kubectl diff --server-side` lists the objects that would change; the manual first sync follows in the runbook.
+- name: Bootstrap ArgoCD
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - argocd-bootstrap

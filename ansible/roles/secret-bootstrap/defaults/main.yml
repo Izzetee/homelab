@@ -1,0 +1,5 @@
+---
+# The only Kubernetes Secrets this role creates, and the environment variable each value comes from.
+secret_bootstrap_secrets:
+  - {namespace: cert-manager, name: cloudflare-dns01, key: api-token, env: CF_DNS01_TOKEN}
+  - {namespace: cloudflared, name: tunnel-token, key: token, env: CF_TUNNEL_TOKEN}

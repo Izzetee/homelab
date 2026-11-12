@@ -1,0 +1,72 @@
+---
+# Decides whether the K3s role of the collection has to run on a node. The collection's roles restart K3s on every
+# run and skip their config and install steps in check mode, so a dry-run showed nothing and an unchanged apply restarted
+# the server. This role writes the configuration itself (visible as a changed task in check mode), compares the installed
+# K3s version and, on an agent, whether the unit's environment file holds the token (the token goes to grep on stdin, never
+# into an argument), and sets k3s_run. Nothing here prints a value.
+# Variables: k3s_version, k3s_config_content, k3s_config_dir, k3s_detect_forced (a change made earlier in the run),
+# k3s_detect_token_file and token (agents only), k3s_unit, k3s_marker_existed (role k3s_marker: a restart an earlier run
+# left pending).
+- name: Installed K3s version
+  ansible.builtin.command: k3s --version
+  register: k3s_detect_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Is the K3s service active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ k3s_unit }}"]
+  register: k3s_detect_active
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: The K3s configuration directory
+  ansible.builtin.file:
+    path: "{{ k3s_config_dir }}"
+    state: directory
+    owner: "{{ k3s_detect_owner }}"
+    group: "{{ k3s_detect_group }}"
+    mode: "0755"
+
+- name: Write the K3s configuration (no secret in it)
+  ansible.builtin.copy:
+    dest: "{{ k3s_config_dir }}/config.yaml"
+    content: "{{ k3s_config_content }}"
+    owner: "{{ k3s_detect_owner }}"
+    group: "{{ k3s_detect_group }}"
+    mode: "0644"
+  register: k3s_detect_written
+
+- name: Is the token in the unit's environment file
+  ansible.builtin.command:
+    argv: [grep, -qxF, -f, "-", "{{ k3s_detect_token_file }}"]
+    stdin: "K3S_TOKEN={{ token }}"
+  register: k3s_detect_token
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when: k3s_detect_token_file is defined
+
+- name: Does K3s have to be installed or restarted
+  # noqa var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    k3s_run: >-
+      {{ k3s_detect_version.rc != 0
+         or (k3s_detect_version.stdout_lines[0].split(' ')[2] | default('')) != k3s_version
+         or k3s_detect_written.changed
+         or (k3s_detect_forced | default(false) | bool)
+         or (k3s_marker_existed | default(false) | bool)
+         or k3s_detect_active.rc != 0
+         or (k3s_detect_token.rc | default(0)) != 0 }}
+
+- name: Report what the collection's role will do
+  ansible.builtin.debug:
+    msg: >-
+      K3s {{ k3s_version }}
+      {{ 'will be installed or restarted (version, configuration, token, a pending restart or an inactive service)' if k3s_run | bool
+         else 'needs no install and no restart' }}
+  changed_when: k3s_run | bool
+  when: ansible_check_mode

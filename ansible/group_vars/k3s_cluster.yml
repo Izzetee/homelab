@@ -1,0 +1,45 @@
+---
+# Non-secret cluster settings (k3s-ansible variables). The join token is NOT here: see group_vars/agent.yml
+# and the k3s-cluster play (token drop-in written by a no_log task).
+k3s_version: v1.34.13+k3s1
+api_endpoint: 192.168.1.81
+# the admin kubeconfig lands on the controller only (owner-only: the wrapper runs with umask 077)
+kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
+# K3s binary and install script, fetched and checksum-verified on the controller (k3s-cluster.yml) and distributed by the
+# collection's airgap path: nothing is downloaded or executed unverified on a node. The binary is the release asset
+# (linux/amd64; the arm64 nodes of a later iteration need their own pin), the script is install.sh of the release tag.
+airgap_dir: "{{ lookup('env', 'HOME') }}/.cache/k3smig/airgap"
+k3s_binary_checksum: b9a7c47aab81db66d0253378ddea0d06f8a6dca4dace7a26db3f00fa2f0e3717
+k3s_install_script_checksum: 40b487f0d8ef4f5d1bf422e7bb6228cc7789c40ecc66c5ab067d396bbee9816e
+# the configuration files the k3s_detect role writes (identical to what the collection would write), so a re-run can tell
+# "nothing changed" from "install and restart"
+k3s_config_dir: /etc/rancher/k3s
+# root-only marker: a K3s restart is pending (written before the first write that needs one, removed after a verified restart)
+k3s_restart_marker: /var/lib/k3smig/k3s-restart-pending
+# K3s bundled images by digest (ansible/k3s-images.lock; the k3s-cluster play asserts pause-image equals the lock)
+k3s_pause_image: docker.io/rancher/mirrored-pause:3.10.2@sha256:f548e0e8e3dc1896ca956272154dde3314e8cc4fde0a57577ee9fa1c63f5baf4
+# server flags: Cilium replaces flannel, kube-proxy, network policy and the service load balancer; CoreDNS, the
+# local-path provisioner and metrics-server come from the pinned copies in ansible/files/k3s-addons
+server_config_yaml: |
+  cluster-init: true
+  flannel-backend: none
+  disable-network-policy: true
+  disable-kube-proxy: true
+  disable:
+    - servicelb
+    - traefik
+    - coredns
+    - local-storage
+    - metrics-server
+  disable-helm-controller: true
+  pause-image: "{{ k3s_pause_image }}"
+  secrets-encryption: true
+  etcd-snapshot-schedule-cron: "0 */6 * * *"
+  etcd-snapshot-retention: 12
+  tls-san:
+    - 192.168.1.81
+  write-kubeconfig-mode: "0600"
+  kube-apiserver-arg:
+    - admission-control-config-file=/etc/rancher/k3s/psa.yaml
+agent_config_yaml: |
+  pause-image: "{{ k3s_pause_image }}"

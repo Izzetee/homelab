@@ -9,3 +9,4 @@ kubeconfig*
 # OpenTofu working files
 .terraform/
 *.tfplan
+.ansible/

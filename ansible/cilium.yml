@@ -1,0 +1,81 @@
+---
+# Cilium bootstrap from the bastion (localhost, against the kubeconfig there): the Gateway API CRDs from the pinned
+# release manifest (checksum), then the pinned chart with apps/platform/cilium/values.yaml. ArgoCD later syncs the same
+# chart version and values file, so the handover has no diff. No secret is involved (--check --diff is fine).
+# Break-glass use: run it against the API on 192.168.1.81, which does not depend on Cilium.
+- name: Bootstrap Cilium
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    cilium_chart_version: 1.20.4
+    cilium_values: "{{ playbook_dir }}/../apps/platform/cilium/values.yaml"
+    gateway_api_version: v1.6.3
+    gateway_api_url: https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.3/standard-install.yaml
+    gateway_crds_checksum: 356c2b8e286a964dc20995435659ad1095386329974793af10bbfe3eff977fe5
+    gateway_api_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/k3smig"
+  tasks:
+    - name: Version of the installed Gateway API CRDs
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - get
+          - crd
+          - gateways.gateway.networking.k8s.io
+          - --output
+          - "jsonpath={.metadata.annotations.gateway\\.networking\\.k8s\\.io/bundle-version}"
+      register: cilium_gateway_crd
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Cache directory for the downloaded manifest
+      ansible.builtin.file:
+        path: "{{ gateway_api_cache }}"
+        state: directory
+        mode: "0700"
+      when: cilium_gateway_crd.stdout != gateway_api_version
+
+    - name: Download the pinned Gateway API manifest (checksum verified)
+      ansible.builtin.get_url:
+        url: "{{ gateway_api_url }}"
+        dest: "{{ gateway_api_cache }}/gateway-api-{{ gateway_api_version }}-standard-install.yaml"
+        checksum: "sha256:{{ gateway_crds_checksum }}"
+        mode: "0600"
+        timeout: 120
+      when:
+        - cilium_gateway_crd.stdout != gateway_api_version
+        - not ansible_check_mode
+
+    - name: Report the missing or different Gateway API CRDs
+      ansible.builtin.debug:
+        msg: "Gateway API {{ gateway_api_version }} CRDs will be applied"
+      changed_when: true
+      when:
+        - cilium_gateway_crd.stdout != gateway_api_version
+        - ansible_check_mode
+
+    - name: Apply the Gateway API CRDs server-side (they exceed the annotation size limit)
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --server-side
+          - --field-manager=bootstrap-gateway-api
+          - --filename
+          - "{{ gateway_api_cache }}/gateway-api-{{ gateway_api_version }}-standard-install.yaml"
+      changed_when: true
+      when:
+        - cilium_gateway_crd.stdout != gateway_api_version
+        - not ansible_check_mode
+
+    - name: The Cilium release
+      ansible.builtin.include_role:
+        name: helm_release
+      vars:
+        helm_release_name: cilium
+        helm_release_namespace: kube-system
+        helm_release_chart: cilium
+        helm_release_repo: https://helm.cilium.io
+        helm_release_version: "{{ cilium_chart_version }}"
+        helm_release_values: "{{ cilium_values }}"

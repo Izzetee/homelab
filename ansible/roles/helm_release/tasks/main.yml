@@ -1,0 +1,61 @@
+---
+# Role helm_release: installs or upgrades one Helm release from a pinned chart version and a values file, and reports
+# `changed` only when the release differs (chart version, status or user values), also in --check mode.
+# `helm list` reports chart as <chart>-<version> (seen with helm 4.3.1).
+# Variables: helm_release_name, helm_release_namespace, helm_release_chart, helm_release_repo,
+# helm_release_version, helm_release_values (path), helm_release_timeout.
+- name: "Read the installed release"
+  ansible.builtin.command:
+    argv: [helm, list, --filter, "^{{ helm_release_name }}$", --namespace, "{{ helm_release_namespace }}", --output, json]
+  register: helm_release_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: "Read the user values of the installed release"
+  ansible.builtin.command:
+    argv: [helm, get, values, "{{ helm_release_name }}", --namespace, "{{ helm_release_namespace }}", --output, json]
+  register: helm_release_values_now
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: helm_release_status.rc == 0 and (helm_release_status.stdout | from_json | length) > 0
+
+- name: "Is the release current"
+  ansible.builtin.set_fact:
+    helm_release_current: >-
+      {{ helm_release_status.rc == 0
+         and (helm_release_status.stdout | from_json | length) == 1
+         and (helm_release_status.stdout | from_json)[0].status == 'deployed'
+         and (helm_release_status.stdout | from_json)[0].chart == helm_release_chart ~ '-' ~ helm_release_version
+         and (helm_release_values_now.stdout | default('{}') | from_json | default({}, true))
+             == (lookup('ansible.builtin.file', helm_release_values) | from_yaml) }}
+
+- name: "Report a missing or different release"
+  ansible.builtin.debug:
+    msg: "{{ helm_release_name }} {{ helm_release_version }} will be installed or upgraded"
+  changed_when: not helm_release_current | bool
+  when: ansible_check_mode
+
+- name: "Install or upgrade the release"
+  ansible.builtin.command:
+    argv:
+      - helm
+      - upgrade
+      - --install
+      - "{{ helm_release_name }}"
+      - "{{ helm_release_chart }}"
+      - --repo
+      - "{{ helm_release_repo }}"
+      - --version
+      - "{{ helm_release_version }}"
+      - --namespace
+      - "{{ helm_release_namespace }}"
+      - --create-namespace
+      - --values
+      - "{{ helm_release_values }}"
+      - --wait
+      - --timeout
+      - "{{ helm_release_timeout | default('10m') }}"
+  changed_when: true
+  when: not helm_release_current | bool and not ansible_check_mode

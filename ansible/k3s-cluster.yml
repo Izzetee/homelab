@@ -1,0 +1,217 @@
+---
+# Installs K3s with the pinned k3s-ansible collection. Secret input: K3S_TOKEN from the environment of the run.
+# Run it with the wrapper of the operations repository, never with -v or --diff (a diff would print the token).
+# The first run is limited to the server (--limit server); the agents join later (--limit agent).
+# The plays of the collection's site playbook are written out here (same roles, same order) so that
+#  - the K3s binary and install script come from the collection's airgap path: fetched here with a pinned checksum and
+#    copied to the nodes (the collection would otherwise run an unverified get.k3s.io script as root on every node);
+#  - the K3s roles run only when the version, the configuration or the token changed, a restart is still pending from an
+#    interrupted run (marker file) or the service is not active (the role k3s_detect). Check mode skips them and prints
+#    the preview instead (the roles cannot run on a node that has no K3s yet); an unchanged re-run restarts nothing.
+#
+# Token handling (audit of k3s-ansible 1.2.2, recorded in the operations repository):
+#  - the server's token comes from a drop-in written by the no_log task below (owner-only), NOT from the `token`
+#    variable, because the collection would write that into /etc/rancher/k3s/config.yaml with mode 0644;
+#  - the agents get `token` from the environment (group_vars/agent.yml); the collection writes it into the
+#    agent's systemd environment file (created 0600 by the K3s install script) with a no_log task;
+#  - the closing play fails the run when a token file is not root 0600 or a user kubeconfig exists on a node.
+# The tasks run on the controller through delegate_to: an implicit localhost play would be dropped by --limit.
+- name: Fetch the pinned K3s binary and install script on the controller
+  hosts: k3s_cluster
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Verified downloads on the controller
+      delegate_to: localhost
+      run_once: true  # noqa run-once[task]
+      block:
+        - name: Directory of the verified downloads (owner-only)
+          ansible.builtin.file:
+            path: "{{ airgap_dir }}"
+            state: directory
+            mode: "0700"
+          check_mode: false
+
+        # check_mode: false on purpose: these writes stay in the owner-only cache of the controller, are
+        # checksum-verified and idempotent; the collection's airgap role needs the files even in a dry-run
+        - name: The K3s binary of the release (checksum verified)
+          ansible.builtin.get_url:
+            url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/k3s"
+            dest: "{{ airgap_dir }}/k3s-amd64"
+            checksum: "sha256:{{ k3s_binary_checksum }}"
+            mode: "0755"
+            timeout: 300
+          check_mode: false
+
+        - name: The install script of the release tag (checksum verified)
+          ansible.builtin.get_url:
+            url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version | urlencode }}/install.sh"
+            dest: "{{ airgap_dir }}/k3s-install.sh"
+            checksum: "sha256:{{ k3s_install_script_checksum }}"
+            mode: "0755"
+            timeout: 120
+          check_mode: false
+
+- name: Remember an unfinished earlier run and mark this one as pending
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  roles:
+    - k3s_marker
+
+- name: Prepare the server before K3s starts
+  hosts: server
+  become: true
+  gather_facts: false
+  tasks:
+    - name: The pause image of the group variables is the one of the lock file
+      ansible.builtin.assert:
+        that:
+          - k3s_pause_image in lookup('ansible.builtin.file', playbook_dir ~ '/k3s-images.lock').splitlines()
+        quiet: true
+      delegate_to: localhost
+      become: false
+
+    - name: Directories of the K3s data and its auto-deploy manifests (owner-only, as K3s creates them)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+      loop:
+        - /var/lib/rancher/k3s
+        - /var/lib/rancher/k3s/server
+        - /var/lib/rancher/k3s/server/manifests
+
+    - name: Pinned add-on manifests, placed before K3s starts for the first time
+      ansible.builtin.copy:
+        src: "k3s-addons/{{ item }}"
+        dest: "/var/lib/rancher/k3s/server/manifests/{{ item }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop:
+        - pinned-coredns.yaml
+        - pinned-local-storage.yaml
+        - pinned-metrics-server.yaml
+
+    - name: The join token is in the environment
+      ansible.builtin.assert:
+        that:
+          - lookup('ansible.builtin.env', 'K3S_TOKEN') | length > 0
+        quiet: true
+      no_log: true
+      delegate_to: localhost
+      become: false
+
+    - name: Directory of the K3s configuration drop-ins
+      ansible.builtin.file:
+        path: /etc/rancher/k3s/config.yaml.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Join token drop-in (no_log, owner-only)
+      ansible.builtin.copy:
+        dest: /etc/rancher/k3s/config.yaml.d/10-token.yaml
+        content: "token: {{ lookup('ansible.builtin.env', 'K3S_TOKEN') | to_json }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+      register: k3s_server_token_dropin
+      no_log: true
+      diff: false
+
+- name: Decide whether K3s has to be installed or restarted
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  roles:
+    - role: k3s_detect
+      vars:
+        k3s_detect_forced: "{{ (k3s_server_token_dropin | default({})).changed | default(false) }}"
+
+- name: Cluster preparation
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+  roles:
+    - role: k3s.orchestration.prereq
+    - role: k3s.orchestration.airgap
+      when: k3s_run | bool and not ansible_check_mode
+    - role: k3s.orchestration.raspberrypi
+
+- name: Set up the K3s server
+  hosts: server
+  become: true
+  gather_facts: false
+  roles:
+    - role: k3s.orchestration.k3s_server
+      when: k3s_run | bool and not ansible_check_mode
+
+- name: Set up the K3s agents
+  hosts: agent
+  become: true
+  gather_facts: false
+  roles:
+    - role: k3s.orchestration.k3s_agent
+      when: k3s_run | bool and not ansible_check_mode
+
+- name: Clear the restart marker once K3s is active
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify the restart and clear the marker
+      ansible.builtin.include_role:
+        name: k3s_marker
+        tasks_from: finish
+
+- name: Check the token files and the kubeconfigs
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Look at every file that can hold the token and at the user kubeconfigs
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/rancher/k3s/config.yaml.d/10-token.yaml
+        - /etc/systemd/system/k3s.service.env
+        - /etc/systemd/system/k3s-agent.service.env
+        - /var/lib/rancher/k3s/server/token
+        - /etc/rancher/k3s/k3s.yaml
+      register: k3s_cluster_files
+      check_mode: false
+
+    - name: Each of them is owned by root with mode 0600
+      ansible.builtin.assert:
+        that:
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+        quiet: true
+        fail_msg: "{{ item.item }} is not root 0600"
+      loop: "{{ k3s_cluster_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stat.exists
+
+    - name: No user kubeconfig on the node
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "/home/{{ ansible_user }}/.kube/config"
+        - /root/.kube/config
+      register: k3s_cluster_user_kubeconfig
+      check_mode: false
+
+    - name: None exists
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        quiet: true
+        fail_msg: "{{ item.item }} exists"
+      loop: "{{ k3s_cluster_user_kubeconfig.results }}"
+      loop_control:
+        label: "{{ item.item }}"
