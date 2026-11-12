@@ -12,3 +12,10 @@ resources:
   - gateway.yaml
   - cloudflared.yaml
   - argocd.yaml
+  - observability-base.yaml
+  - kube-prometheus-stack.yaml
+  - loki.yaml
+  - tempo.yaml
+  - alloy.yaml
+  - blackbox-exporter.yaml
+  - observability-config.yaml

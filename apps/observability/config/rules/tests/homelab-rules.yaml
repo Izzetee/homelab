@@ -1,0 +1,334 @@
+# promtool unit tests of the homelab rules and of the two default rules that the must-have list relies on. Each rule has one
+# firing case and one quiet case. The file list below is replaced by the rendered rule files when the tests run.
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  # node filesystem above 80 %
+  - name: node disk full
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '15+0x30'
+      - series: 'node_filesystem_size_bytes{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '100+0x30'
+      - series: 'node_filesystem_readonly{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNodeDiskAbove80
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: n1, device: /dev/sda1, mountpoint: /, fstype: ext4}
+            exp_annotations: {summary: "Filesystem / of n1 is more than 80 % full"}
+  - name: node disk healthy
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '60+0x30'
+      - series: 'node_filesystem_size_bytes{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '100+0x30'
+      - series: 'node_filesystem_readonly{instance="n1",device="/dev/sda1",mountpoint="/",fstype="ext4"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNodeDiskAbove80
+        exp_alerts: []
+  # volume above 80 %
+  - name: volume full
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_used_bytes{namespace="app",persistentvolumeclaim="data"}'
+        values: '90+0x30'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="app",persistentvolumeclaim="data"}'
+        values: '100+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabVolumeAbove80
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: app, persistentvolumeclaim: data}
+            exp_annotations: {summary: "Volume data in app is more than 80 % full"}
+  - name: volume healthy
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_used_bytes{namespace="app",persistentvolumeclaim="data"}'
+        values: '50+0x30'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="app",persistentvolumeclaim="data"}'
+        values: '100+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabVolumeAbove80
+        exp_alerts: []
+  # crash-looping pods (default rule)
+  - name: crash loop
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff",job="kube-state-metrics",namespace="app",pod="web-1",container="web"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KubePodCrashLooping
+        exp_alerts:
+          - exp_labels: {severity: warning, reason: CrashLoopBackOff, job: kube-state-metrics, namespace: app, pod: web-1, container: web}
+            exp_annotations:
+              description: 'Pod app/web-1 (web) is in waiting state (reason: "CrashLoopBackOff") on cluster .'
+              runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodcrashlooping
+              summary: Pod is crash looping.
+  - name: no crash loop
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff",job="kube-state-metrics",namespace="app",pod="web-1",container="web"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KubePodCrashLooping
+        exp_alerts: []
+  # failed jobs (default rule)
+  - name: job failed
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{job="kube-state-metrics",namespace="app",job_name="migrate",condition="true"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KubeJobFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, job: kube-state-metrics, namespace: app, job_name: migrate, condition: "true"}
+            exp_annotations:
+              description: Job app/migrate failed to complete. Removing failed job after investigation should clear this alert on cluster .
+              runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubejobfailed
+              summary: Job failed to complete.
+  - name: job not failed
+    interval: 1m
+    input_series:
+      - series: 'kube_job_failed{job="kube-state-metrics",namespace="app",job_name="migrate",condition="true"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: KubeJobFailed
+        exp_alerts: []
+  # database pods not ready
+  - name: database not ready
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="db",pod="pg-1",condition="false"}'
+        values: '1+0x20'
+      - series: 'kube_pod_labels{namespace="db",pod="pg-1",label_cnpg_io_cluster="pg"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDatabaseNotReady
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: db, pod: pg-1, condition: "false"}
+            exp_annotations: {summary: "Database pod pg-1 in db is not ready"}
+  - name: not a database pod
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="app",pod="web-1",condition="false"}'
+        values: '1+0x20'
+      - series: 'kube_pod_labels{namespace="app",pod="web-1",label_cnpg_io_cluster=""}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDatabaseNotReady
+        exp_alerts: []
+  # certificates not ready
+  - name: certificate not ready
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_ready_status{name="wildcard",namespace="gateway",condition="False"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HomelabCertificateNotReady
+        exp_alerts:
+          - exp_labels: {severity: warning, name: wildcard, namespace: gateway, condition: "False"}
+            exp_annotations: {summary: "Certificate wildcard in gateway is not ready"}
+  - name: certificate ready
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_ready_status{name="wildcard",namespace="gateway",condition="False"}'
+        values: '0+0x60'
+      - series: 'certmanager_certificate_ready_status{name="wildcard",namespace="gateway",condition="True"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HomelabCertificateNotReady
+        exp_alerts: []
+  # certificates expiring within 14 days (the series value is the expiry time in seconds since the epoch; the test clock starts at 0)
+  - name: certificate expires soon
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{name="wildcard",namespace="gateway"}'
+        values: '864000+0x180'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HomelabCertificateExpiresSoon
+        exp_alerts:
+          - exp_labels: {severity: warning, name: wildcard, namespace: gateway}
+            exp_annotations: {summary: "Certificate wildcard in gateway expires in less than 14 days"}
+  - name: certificate valid for long
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{name="wildcard",namespace="gateway"}'
+        values: '2592000+0x180'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: HomelabCertificateExpiresSoon
+        exp_alerts: []
+  # ArgoCD applications
+  - name: application degraded
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_health_status{name="cert-manager",project="platform",health_status="Degraded"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoAppUnhealthy
+        exp_alerts:
+          - exp_labels: {severity: warning, name: cert-manager, project: platform, health_status: Degraded}
+            exp_annotations: {summary: "Application cert-manager is Degraded"}
+  - name: application healthy
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_health_status{name="cert-manager",project="platform",health_status="Degraded"}'
+        values: '0+0x40'
+      - series: 'homelab_argocd_app_health_status{name="cert-manager",project="platform",health_status="Healthy"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoAppUnhealthy
+        exp_alerts: []
+  - name: application out of sync
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_sync_status{name="cert-manager",project="platform",sync_status="OutOfSync"}'
+        values: '1+0x100'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HomelabArgoAppOutOfSync
+        exp_alerts:
+          - exp_labels: {severity: warning, name: cert-manager, project: platform, sync_status: OutOfSync}
+            exp_annotations: {summary: "Application cert-manager is out of sync"}
+  - name: application synced
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_sync_status{name="cert-manager",project="platform",sync_status="OutOfSync"}'
+        values: '0+0x100'
+      - series: 'homelab_argocd_app_sync_status{name="cert-manager",project="platform",sync_status="Synced"}'
+        values: '1+0x100'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HomelabArgoAppOutOfSync
+        exp_alerts: []
+  # backup jobs: last success older than 26 hours (the series value is a timestamp; the test clock starts at 0)
+  - name: backup too old
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup="true"}'
+        values: '1+0x1860'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="backup",cronjob="nightly"}'
+        values: '0+0x1860'
+      - series: 'kube_cronjob_created{namespace="backup",cronjob="nightly"}'
+        values: '0+0x1860'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: HomelabBackupTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: backup, cronjob: nightly}
+            exp_annotations: {summary: "Backup job nightly in backup has no success for more than 26 hours"}
+  - name: backup never succeeded
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup="true"}'
+        values: '1+0x1860'
+      - series: 'kube_cronjob_created{namespace="backup",cronjob="nightly"}'
+        values: '0+0x1860'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: HomelabBackupTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: backup, cronjob: nightly}
+            exp_annotations: {summary: "Backup job nightly in backup has no success for more than 26 hours"}
+  - name: backup recent
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup="true"}'
+        values: '1+0x1860'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="backup",cronjob="nightly"}'
+        values: '104400+0x1860'
+      - series: 'kube_cronjob_created{namespace="backup",cronjob="nightly"}'
+        values: '0+0x1860'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: HomelabBackupTooOld
+        exp_alerts: []
+  - name: cronjob without the backup label
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="app",cronjob="cleanup",label_homelab_io_backup=""}'
+        values: '1+0x1860'
+      - series: 'kube_cronjob_status_last_successful_time{namespace="app",cronjob="cleanup"}'
+        values: '0+0x1860'
+      - series: 'kube_cronjob_created{namespace="app",cronjob="cleanup"}'
+        values: '0+0x1860'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: HomelabBackupTooOld
+        exp_alerts: []
+  # etcd snapshots: the newest ready one older than 7 hours, or none at all
+  - name: etcd snapshot too old
+    interval: 1m
+    input_series:
+      - series: 'homelab_etcd_snapshot_created_timestamp_seconds{name="etcd-snapshot-a"}'
+        values: '0+0x600'
+      - series: 'homelab_etcd_snapshot_ready{name="etcd-snapshot-a"}'
+        values: '1+0x600'
+    alert_rule_test:
+      - eval_time: 9h
+        alertname: HomelabEtcdSnapshotTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "The newest ready etcd snapshot is older than 7 hours"}
+  - name: no ready etcd snapshot
+    interval: 1m
+    input_series:
+      - series: 'homelab_etcd_snapshot_ready{name="etcd-snapshot-a"}'
+        values: '0+0x600'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HomelabEtcdSnapshotTooOld
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "The newest ready etcd snapshot is older than 7 hours"}
+  - name: etcd snapshot recent
+    interval: 1m
+    input_series:
+      - series: 'homelab_etcd_snapshot_created_timestamp_seconds{name="etcd-snapshot-a"}'
+        values: '28800+0x600'
+      - series: 'homelab_etcd_snapshot_ready{name="etcd-snapshot-a"}'
+        values: '1+0x600'
+    alert_rule_test:
+      - eval_time: 9h
+        alertname: HomelabEtcdSnapshotTooOld
+        exp_alerts: []
+  # failing probes
+  - name: probe failing
+    interval: 1m
+    input_series:
+      - series: 'probe_success{instance="https://grafana.lan.chill-town.de/api/health",job="probe/monitoring/grafana-lan"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabProbeFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: "https://grafana.lan.chill-town.de/api/health", job: probe/monitoring/grafana-lan}
+            exp_annotations: {summary: "Probe of https://grafana.lan.chill-town.de/api/health fails"}
+  - name: probe succeeding
+    interval: 1m
+    input_series:
+      - series: 'probe_success{instance="https://grafana.lan.chill-town.de/api/health",job="probe/monitoring/grafana-lan"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabProbeFailed
+        exp_alerts: []

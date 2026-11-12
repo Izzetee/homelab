@@ -40,6 +40,33 @@ spec:
     - group: cert-manager.io
       kind: ClusterIssuer
 ---
+# Metrics, logs, traces and alerts. It may read this repository and the three pinned chart repositories and deploy into the
+# two observability namespaces only; it creates namespaces, CRDs and RBAC, nothing else cluster-wide.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: observability
+  namespace: argocd
+spec:
+  description: Observability stack (metrics, logs, traces, alerts, dashboards)
+  sourceRepos:
+    - https://github.com/Izzetee/homelab.git
+    - https://prometheus-community.github.io/helm-charts
+    - https://grafana-community.github.io/helm-charts
+    - https://grafana.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: node-exporter
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: "*"
+---
 # Nothing may use the default project: no source, no destination.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

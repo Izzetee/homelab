@@ -1,0 +1,31 @@
+# Black-box probes through the blackbox exporter. A redirect is a failure: the module follows none and accepts only the
+# exact status; a target without an unauthenticated health path is not probed.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: grafana-lan
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://grafana.lan.chill-town.de/api/health
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: pihole-dns
+  namespace: monitoring
+spec:
+  module: dns_pihole
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - 192.168.1.79:53

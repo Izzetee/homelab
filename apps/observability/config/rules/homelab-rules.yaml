@@ -1,0 +1,94 @@
+# Alerts of the homelab on top of the default rules of kube-prometheus-stack (which also cover crash loops and failed
+# jobs). Unit tests: tests/homelab-rules.yaml (promtool).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab
+      rules:
+        - alert: HomelabNodeDiskAbove80
+          expr: |
+            (1 - node_filesystem_avail_bytes{fstype=~"ext4|xfs"} / node_filesystem_size_bytes{fstype=~"ext4|xfs"}) > 0.8
+              and on (instance, device, mountpoint) node_filesystem_readonly{fstype=~"ext4|xfs"} == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Filesystem {{ $labels.mountpoint }} of {{ $labels.instance }} is more than 80 % full"
+        - alert: HomelabVolumeAbove80
+          expr: kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.8
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Volume {{ $labels.persistentvolumeclaim }} in {{ $labels.namespace }} is more than 80 % full"
+        - alert: HomelabDatabaseNotReady
+          expr: |
+            (kube_pod_status_ready{condition="false"} == 1)
+              and on (namespace, pod) kube_pod_labels{label_cnpg_io_cluster!=""}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Database pod {{ $labels.pod }} in {{ $labels.namespace }} is not ready"
+        - alert: HomelabCertificateNotReady
+          expr: certmanager_certificate_ready_status{condition="False"} == 1
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.name }} in {{ $labels.namespace }} is not ready"
+        - alert: HomelabCertificateExpiresSoon
+          expr: certmanager_certificate_expiration_timestamp_seconds - time() < 14 * 24 * 3600
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.name }} in {{ $labels.namespace }} expires in less than 14 days"
+        - alert: HomelabArgoAppUnhealthy
+          expr: homelab_argocd_app_health_status{health_status=~"Degraded|Missing"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Application {{ $labels.name }} is {{ $labels.health_status }}"
+        - alert: HomelabArgoAppOutOfSync
+          expr: homelab_argocd_app_sync_status{sync_status="OutOfSync"} == 1
+          for: 60m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Application {{ $labels.name }} is out of sync"
+        - alert: HomelabBackupTooOld
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time
+                and on (namespace, cronjob) kube_cronjob_labels{label_homelab_io_backup="true"}) > 26 * 3600
+            or
+            ((time() - kube_cronjob_created)
+                and on (namespace, cronjob) kube_cronjob_labels{label_homelab_io_backup="true"}
+                unless on (namespace, cronjob) kube_cronjob_status_last_successful_time) > 26 * 3600
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backup job {{ $labels.cronjob }} in {{ $labels.namespace }} has no success for more than 26 hours"
+        - alert: HomelabEtcdSnapshotTooOld
+          expr: |
+            time() - max(homelab_etcd_snapshot_created_timestamp_seconds
+              and on (name) homelab_etcd_snapshot_ready == 1) > 7 * 3600
+            or absent(homelab_etcd_snapshot_ready == 1)
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The newest ready etcd snapshot is older than 7 hours"
+        - alert: HomelabProbeFailed
+          expr: probe_success == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Probe of {{ $labels.instance }} fails"
