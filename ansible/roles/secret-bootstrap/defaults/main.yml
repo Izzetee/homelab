@@ -1,5 +1,21 @@
 ---
-# The only Kubernetes Secrets this role creates, and the environment variable each value comes from.
+# The only Kubernetes Secrets this role creates. Each key takes its value from an environment variable (`env`) or is a
+# fixed non-secret value (`literal`).
 secret_bootstrap_secrets:
-  - {namespace: cert-manager, name: cloudflare-dns01, key: api-token, env: CF_DNS01_TOKEN}
-  - {namespace: cloudflared, name: tunnel-token, key: token, env: CF_TUNNEL_TOKEN}
+  - namespace: cert-manager
+    name: cloudflare-dns01
+    keys:
+      - {key: api-token, env: CF_DNS01_TOKEN}
+  - namespace: cloudflared
+    name: tunnel-token
+    keys:
+      - {key: token, env: CF_TUNNEL_TOKEN}
+  - namespace: monitoring
+    name: grafana-admin
+    keys:
+      - {key: admin-user, literal: admin}
+      - {key: admin-password, env: GRAFANA_ADMIN_PASSWORD}
+  - namespace: monitoring
+    name: alertmanager-receiver
+    keys:
+      - {key: webhook-url, env: ALERTMANAGER_DISCORD_WEBHOOK_URL}
