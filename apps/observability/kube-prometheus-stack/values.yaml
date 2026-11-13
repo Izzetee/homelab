@@ -108,6 +108,11 @@ grafana:
     existingSecret: grafana-admin
     userKey: admin-user
     passwordKey: admin-password
+  envValueFrom:
+    GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+      secretKeyRef:
+        name: grafana-oidc
+        key: grafana
   persistence:
     enabled: false
   initChownData:
@@ -157,6 +162,19 @@ grafana:
       allow_org_create: false
     auth.anonymous:
       enabled: false
+    # Sign-in through the identity provider; the client secret comes from the environment (envValueFrom below).
+    auth.generic_oauth:
+      enabled: true
+      name: Authentik
+      client_id: grafana-k3s
+      scopes: openid email profile
+      auth_url: https://auth.chill-town.de/application/o/authorize/
+      token_url: https://auth.chill-town.de/application/o/token/
+      api_url: https://auth.chill-town.de/application/o/userinfo/
+      use_pkce: true
+      allow_sign_up: true
+      role_attribute_path: "contains(groups[*], 'authentik Admins') && 'Admin' || 'Viewer'"
+      role_attribute_strict: true
     analytics:
       reporting_enabled: false
       check_for_updates: false

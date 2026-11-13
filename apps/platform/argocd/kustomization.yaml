@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - project.yaml
   - route.yaml
+  - external-secrets.yaml

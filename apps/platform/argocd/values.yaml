@@ -26,6 +26,17 @@ configs:
     # TLS ends at the gateway
     server.insecure: true
   cm:
+    url: https://argocd.lan.chill-town.de
+    # Sign-in through the identity provider (the client secret is read from the Secret `argocd-oidc`, kept by the store).
+    oidc.config: |
+      name: Authentik
+      issuer: https://auth.chill-town.de/application/o/argocd/
+      clientID: argocd
+      clientSecret: $argocd-oidc:argocd
+      requestedScopes:
+        - openid
+        - profile
+        - email
     # An Application is Healthy only when it is Synced and Healthy itself, so the root app-of-apps waits for the
     # Applications of a sync wave before it creates the next wave.
     resource.customizations.health.argoproj.io_Application: |
@@ -44,6 +55,11 @@ configs:
         end
       end
       return hs
+  rbac:
+    # the members of the identity provider's admin group are admins; nobody else gets a role
+    policy.default: ""
+    policy.csv: |
+      g, authentik Admins, role:admin
 server:
   resources:
     requests:
