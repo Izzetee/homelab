@@ -1,6 +1,7 @@
 # external-dns (chart external-dns, pinned in the Application). It publishes only HTTPRoutes that opt in with the annotation
 # homelab.io/public-dns=true, only CNAME records, outside lan.chill-town.de, and never deletes (upsert-only). Records of other
 # owners are left alone: the TXT registry skips every record without its own owner id, and the owner record gets its own name.
+# Hostnames come only from the route's spec.hostnames (the hostname annotation is ignored, so a route cannot publish another name).
 # The record target comes from the annotation on the Gateway (apps/platform/gateway/gateway.yaml), so no A record can appear.
 # The first sync ran with --dry-run (no planned change in its log); the flag is removed now.
 image:
@@ -24,6 +25,7 @@ managedRecordTypes:
 interval: 5m
 extraArgs:
   - --cloudflare-proxied
+  - --ignore-hostname-annotation
 env:
   - name: CF_API_TOKEN
     valueFrom:
