@@ -1,0 +1,4 @@
+# namespaces whose Secrets the store may serve; equal to the conditions of the ClusterSecretStore
+cert-manager
+cloudflared
+monitoring

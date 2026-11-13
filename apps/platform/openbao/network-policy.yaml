@@ -1,0 +1,78 @@
+# OpenBao pods: ingress on the API port from the secret operator's controller, Prometheus, the blackbox exporter, the snapshot job and the node;
+# the API and cluster ports between the pods. Egress to cluster DNS, the Kubernetes API (token review, pod labels) and the pods
+# themselves. Nothing else reaches or leaves them.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: openbao
+  namespace: openbao
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+      component: server
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: external-secrets
+            app.kubernetes.io/name: external-secrets
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus-blackbox-exporter
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+            homelab.io/role: openbao-snapshot
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+            app.kubernetes.io/name: openbao
+            component: server
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+            - port: "8201"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - toEntities:
+        - kube-apiserver
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: openbao
+            app.kubernetes.io/name: openbao
+            component: server
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP
+            - port: "8201"
+              protocol: TCP

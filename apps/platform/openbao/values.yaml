@@ -1,0 +1,110 @@
+# OpenBao: three servers with integrated Raft storage, TLS from cert-manager (certificates.yaml), unsealed by a static key
+# from a Secret that the bootstrap role creates. Access is only through the Kubernetes auth method; there is no UI and no route.
+global:
+  tlsDisable: false
+injector:
+  enabled: false
+csi:
+  enabled: false
+ui:
+  enabled: false
+server:
+  image:
+    registry: quay.io
+    repository: openbao/openbao
+    tag: 2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
+  logFormat: json
+  # all three pods start together (none is ready before the first initialisation); a rolling update still waits for each
+  # pod to be ready, so a restart of the set goes one pod at a time
+  podManagementPolicy: Parallel
+  updateStrategyType: RollingUpdate
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  extraEnvironmentVars:
+    BAO_CACERT: /openbao/tls/ca.crt
+  volumes:
+    - name: tls
+      secret:
+        secretName: openbao-tls
+        defaultMode: 288 # 0440
+    - name: seal
+      secret:
+        secretName: openbao-seal-key
+        defaultMode: 288 # 0440
+  volumeMounts:
+    - name: tls
+      mountPath: /openbao/tls
+      readOnly: true
+    - name: seal
+      mountPath: /openbao/seal
+      readOnly: true
+  statefulSet:
+    securityContext:
+      container:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+  dataStorage:
+    size: 2Gi
+    storageClass: local-path-retain
+  ha:
+    enabled: true
+    replicas: 3
+    # the names the serving certificate holds (the pod's own name under the headless service)
+    apiAddr: https://$(BAO_K8S_POD_NAME).openbao-internal:8200
+    disruptionBudget:
+      maxUnavailable: 1
+    raft:
+      enabled: true
+      setNodeId: true
+      config: |
+        ui = false
+        listener "tcp" {
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/openbao/tls/tls.crt"
+          tls_key_file = "/openbao/tls/tls.key"
+          tls_min_version = "tls12"
+          # the root token can only be generated again with the recovery key (break-glass); the endpoint is reachable
+          # from inside the cluster only
+          disable_unauthed_generate_root_endpoints = false
+          telemetry {
+            unauthenticated_metrics_access = true
+          }
+        }
+        storage "raft" {
+          path = "/openbao/data"
+          retry_join {
+            leader_api_addr = "https://openbao-0.openbao-internal:8200"
+            leader_ca_cert_file = "/openbao/tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr = "https://openbao-1.openbao-internal:8200"
+            leader_ca_cert_file = "/openbao/tls/ca.crt"
+          }
+          retry_join {
+            leader_api_addr = "https://openbao-2.openbao-internal:8200"
+            leader_ca_cert_file = "/openbao/tls/ca.crt"
+          }
+        }
+        seal "static" {
+          current_key_id = "k3s-1"
+          current_key = "file:///openbao/seal/seal-key"
+        }
+        audit "file" "to-stdout" {
+          options {
+            file_path = "stdout"
+          }
+        }
+        service_registration "kubernetes" {}
+        telemetry {
+          prometheus_retention_time = "30s"
+          disable_hostname = true
+        }

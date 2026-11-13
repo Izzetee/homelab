@@ -1,0 +1,26 @@
+# Scrapes every OpenBao pod (the headless service) through the monitoring namespace, the only one Prometheus selects. The metrics
+# carry no secret values and need no token; the connection is not verified because the CA lives in another namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: openbao
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - openbao
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+      openbao-internal: "true"
+  endpoints:
+    - port: https
+      scheme: https
+      path: /v1/sys/metrics
+      params:
+        format:
+          - prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+      tlsConfig:
+        insecureSkipVerify: true
