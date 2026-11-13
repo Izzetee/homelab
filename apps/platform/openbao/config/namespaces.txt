@@ -1,4 +1,7 @@
 # namespaces whose Secrets the store may serve; equal to the conditions of the ClusterSecretStore
+argocd
+authentik
 cert-manager
 cloudflared
+external-dns
 monitoring

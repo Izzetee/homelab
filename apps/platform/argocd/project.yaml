@@ -17,6 +17,7 @@ spec:
     - https://cloudnative-pg.github.io/charts
     - https://charts.external-secrets.io
     - https://openbao.github.io/openbao-helm
+    - https://kubernetes-sigs.github.io/external-dns/
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"
