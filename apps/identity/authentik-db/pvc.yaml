@@ -1,0 +1,27 @@
+# Media and custom templates of Authentik (subdirectories `media` and `templates`), and the nightly dumps. NFS volumes of the cluster
+# share on the NAS (retained when a claim is deleted); the share directory is <namespace>/<claim name>.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-media
+  namespace: authentik
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-backup
+  namespace: authentik
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 5Gi

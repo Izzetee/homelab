@@ -1,0 +1,28 @@
+# The database accepts connections on 5432 only from the Authentik pods and the dump job, and the operator's status calls on 8000. Its
+# egress stays open (the instance talks to the API server). Nothing scrapes it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: authentik-db
+  namespace: authentik
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: authentik-db
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: authentik
+        - matchLabels:
+            app.kubernetes.io/name: authentik-pg-dump
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
