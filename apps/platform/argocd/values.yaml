@@ -27,6 +27,8 @@ configs:
     server.insecure: true
   cm:
     url: https://argocd.lan.chill-town.de
+    # Sign-in is through the identity provider only; the CLI of the platform runs with `argocd --core` and needs no login.
+    admin.enabled: "false"
     # Sign-in through the identity provider (the client secret is read from the Secret `argocd-oidc`, kept by the store).
     oidc.config: |
       name: Authentik
