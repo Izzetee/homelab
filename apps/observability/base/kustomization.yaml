@@ -4,3 +4,4 @@ resources:
   - namespaces.yaml
   - grafana-sidecar-role.yaml
   - network-policy.yaml
+  - external-secrets.yaml
