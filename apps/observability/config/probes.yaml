@@ -44,3 +44,34 @@ spec:
     staticConfig:
       static:
         - https://openbao-active.openbao.svc:8200/v1/sys/health
+---
+# The identity provider, by its public name (the instance behind it is whichever the public record points at) and by its LAN name.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: authentik-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://auth.chill-town.de/-/health/ready/
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: authentik-lan
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://auth.lan.chill-town.de/-/health/ready/
