@@ -72,6 +72,24 @@ spec:
     - group: rbac.authorization.k8s.io
       kind: "*"
 ---
+# The identity provider. It may read this repository and the pinned chart repository and deploy into its own namespace only, and it may
+# not create anything cluster-wide: the namespace and its labels come from `networking/`, so the label that opens the gateway's HTTP
+# listener to its routes is never set from here.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: identity
+  namespace: argocd
+spec:
+  description: Identity provider (database, application, routes)
+  sourceRepos:
+    - https://github.com/Izzetee/homelab.git
+    - https://charts.goauthentik.io
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: authentik
+  clusterResourceWhitelist: []
+---
 # Nothing may use the default project: no source, no destination.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

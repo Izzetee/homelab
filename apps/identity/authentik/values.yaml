@@ -1,0 +1,119 @@
+# Authentik (chart authentik, pinned in the Application). The image is the one that runs today, pinned by digest (the tag only makes
+# tag and digest agree; the digest decides). No Redis (this version keeps cache and queue in the database), no operator, no
+# Kubernetes API access: the chart's service account, Roles and token are off; the pods use a service account of their own without a
+# token (apps/identity/authentik/service-account.yaml).
+# Secrets are never in this file: the secret key and the OIDC client secrets come from the secret store through ExternalSecrets, the
+# database password from the secret CloudNativePG generates. Routes are plain HTTPRoute manifests next to this file (the chart's own
+# route and ingress stay off, so the push check can judge them).
+global:
+  image:
+    repository: ghcr.io/goauthentik/server
+    tag: 2026.2.7
+    digest: sha256:da7024c4a7136b2f0fbbae3740c5ed54633edb393b10dc4fae2cdc056b8f70a8
+  # the NFS export of the media volume lists the three virtual machine nodes, which are the amd64 ones
+  nodeSelector:
+    kubernetes.io/arch: amd64
+  env:
+    - name: AUTHENTIK_POSTGRESQL__PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: authentik-db-app
+          key: password
+    - name: AUTHENTIK_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: authentik-secret-key
+          key: secret-key
+    - name: AUTHENTIK_DISABLE_UPDATE_CHECK
+      value: "true"
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+    - name: media
+      persistentVolumeClaim:
+        claimName: authentik-media
+  volumeMounts:
+    - name: media
+      mountPath: /data/media
+      subPath: media
+    - name: media
+      mountPath: /templates
+      subPath: templates
+authentik:
+  # the chart's configuration Secret holds only these non-secret settings; the password and the secret key come from the environment above
+  enabled: true
+  error_reporting:
+    enabled: false
+  postgresql:
+    host: authentik-db-rw
+    name: authentik
+    user: authentik
+    port: 5432
+serviceAccount:
+  create: false
+blueprints:
+  configMaps:
+    - authentik-blueprints
+server:
+  replicas: 1
+  serviceAccountName: authentik
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  ingress:
+    enabled: false
+  route:
+    main:
+      enabled: false
+  livenessProbe:
+    httpGet:
+      path: /-/health/live/
+      port: http
+  readinessProbe:
+    httpGet:
+      path: /-/health/ready/
+      port: http
+  startupProbe:
+    httpGet:
+      path: /-/health/live/
+      port: http
+worker:
+  replicas: 1
+  serviceAccountName: authentik
+  automountServiceAccountToken: false
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 1Gi
+  env:
+    # the client secrets of the blueprints (apps/identity/authentik/blueprints), by reference only
+    - name: AUTHENTIK_OIDC_ARGOCD_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: argocd
+    - name: AUTHENTIK_OIDC_GRAFANA_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: grafana

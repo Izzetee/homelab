@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: authentik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: identity
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: authentik
+  sources:
+    - repoURL: https://charts.goauthentik.io
+      chart: authentik
+      targetRevision: 2026.2.3
+      helm:
+        releaseName: authentik
+        valueFiles:
+          - $values/apps/identity/authentik/values.yaml
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      path: apps/identity/authentik
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
