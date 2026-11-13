@@ -77,3 +77,16 @@ Removing the observability stack. Work from the top while ArgoCD still runs, so 
    (the `argocd` Application does not prune).
 4. Delete the bootstrap Secrets `grafana-admin` and `alertmanager-receiver` if their namespace still exists, then restore the
    sync policy of the root (`apps/root.yaml`) and check that every remaining Application is `Synced` and `Healthy`.
+
+## Secret store
+
+`platform/openbao/` (three servers, integrated storage, TLS from cert-manager, static unseal key), `platform/external-secrets/` (the
+operator) and `platform/secret-store/` (the `ClusterSecretStore` named `openbao`) belong to the AppProject `platform`. Waves: `external-secrets`
+-1, `openbao` 0, `secret-store` 1. Each starts without `automated`: the first sync is by hand after `argocd app diff --core <app>`, the
+CRDs of `external-secrets` first (wait until they are `Established`), then the rest; automatic sync is added in a later change.
+
+- Secrets are read through `ExternalSecret` objects that name `ClusterSecretStore/openbao` and a key path; the store serves the
+  namespaces listed in `platform/secret-store/cluster-secret-store.yaml` only.
+- `platform/openbao/config/` holds the policies, the Kubernetes auth roles and the namespace list that the operations tooling applies
+  to a running store. They contain no values.
+- A renewed serving certificate is read at the next start: `kubectl -n openbao rollout restart statefulset openbao`.

@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openbao
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao
+  sources:
+    - repoURL: https://openbao.github.io/openbao-helm
+      chart: openbao
+      targetRevision: 0.30.7
+      helm:
+        releaseName: openbao
+        skipTests: true
+        valueFiles:
+          - $values/apps/platform/openbao/values.yaml
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      path: apps/platform/openbao
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

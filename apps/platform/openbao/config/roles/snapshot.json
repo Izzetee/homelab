@@ -1,0 +1,7 @@
+{
+  "bound_service_account_names": ["openbao-snapshot"],
+  "bound_service_account_namespaces": ["openbao"],
+  "token_policies": ["snapshot"],
+  "token_ttl": "10m",
+  "token_max_ttl": "10m"
+}

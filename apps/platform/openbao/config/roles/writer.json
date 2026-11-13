@@ -1,0 +1,7 @@
+{
+  "bound_service_account_names": ["openbao-writer"],
+  "bound_service_account_namespaces": ["openbao"],
+  "token_policies": ["writer"],
+  "token_ttl": "15m",
+  "token_max_ttl": "15m"
+}

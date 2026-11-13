@@ -6,6 +6,9 @@ resources:
   - cert-manager.yaml
   - csi-driver-nfs.yaml
   - cloudnative-pg.yaml
+  - external-secrets.yaml
+  - openbao.yaml
+  - secret-store.yaml
   - storage.yaml
   - networking.yaml
   - cert-manager-issuers.yaml

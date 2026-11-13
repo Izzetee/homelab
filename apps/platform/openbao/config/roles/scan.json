@@ -1,0 +1,7 @@
+{
+  "bound_service_account_names": ["openbao-scan"],
+  "bound_service_account_namespaces": ["openbao"],
+  "token_policies": ["scan"],
+  "token_ttl": "10m",
+  "token_max_ttl": "10m"
+}
