@@ -26,6 +26,8 @@ interval: 5m
 extraArgs:
   - --cloudflare-proxied
   - --ignore-hostname-annotation
+  # required by the flag above; the name lies outside the domain filter, so it never becomes a record
+  - --fqdn-template=noop.invalid
 env:
   - name: CF_API_TOKEN
     valueFrom:
