@@ -26,6 +26,9 @@ spec:
       targetRevision: main
       path: apps/platform/openbao
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
     managedNamespaceMetadata:
       labels:
         pod-security.kubernetes.io/enforce: restricted

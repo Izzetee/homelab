@@ -82,8 +82,9 @@ Removing the observability stack. Work from the top while ArgoCD still runs, so 
 
 `platform/openbao/` (three servers, integrated storage, TLS from cert-manager, static unseal key), `platform/external-secrets/` (the
 operator) and `platform/secret-store/` (the `ClusterSecretStore` named `openbao`) belong to the AppProject `platform`. Waves: `external-secrets`
--1, `openbao` 0, `secret-store` 1. Each starts without `automated`: the first sync is by hand after `argocd app diff --core <app>`, the
-CRDs of `external-secrets` first (wait until they are `Established`), then the rest; automatic sync is added in a later change.
+-1, `openbao` 0, `secret-store` 1. A first sync on a new cluster is by hand after `argocd app diff --core <app>`, the
+CRDs of `external-secrets` first (wait until they are `Established`), then the rest; the Applications sync automatically from then on
+(self-heal, no pruning).
 
 - Secrets are read through `ExternalSecret` objects that name `ClusterSecretStore/openbao` and a key path; the store serves the
   namespaces listed in `platform/secret-store/cluster-secret-store.yaml` only.
