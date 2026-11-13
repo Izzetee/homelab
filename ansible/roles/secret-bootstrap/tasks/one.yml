@@ -58,6 +58,8 @@
   changed_when: secret_bootstrap_needed | bool
   when: ansible_check_mode
 
+# The role owns what it writes: `--force-conflicts` lets a run take the keys back from another field manager (the secret store operator
+# after an ExternalSecret was deleted: the rollback of the handover). A guarded Secret is protected by the check above, not by conflicts.
 # A value goes through `printf %s "$NAME"` (a builtin: no argument list) into a process substitution, which kubectl
 # reads as a file descriptor; a literal is the fixed non-secret text of the list.
 - name: "Create or update the Secret (values on file descriptors)"
@@ -75,7 +77,7 @@
       {% endfor %}
         --dry-run=client --output yaml \
         | kubectl label --local --filename - homelab.io/bootstrap=true --output yaml \
-        | kubectl apply --server-side --field-manager=secret-bootstrap --filename -
+        | kubectl apply --server-side --force-conflicts --field-manager=secret-bootstrap --filename -
     executable: /bin/bash
   changed_when: true
   no_log: true
