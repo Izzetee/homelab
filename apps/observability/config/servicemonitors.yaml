@@ -60,3 +60,24 @@ spec:
         - action: replace
           targetLabel: job
           replacement: gateway-envoy
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: external-secrets
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - external-secrets
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets
+      app.kubernetes.io/instance: external-secrets
+  endpoints:
+    - port: metrics
+      interval: 30s
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: external-secrets

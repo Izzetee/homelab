@@ -5,4 +5,5 @@ resources:
   - probes.yaml
   - grafana-route.yaml
   - rules/homelab-rules.yaml
+  - rules/homelab-secret-store.yaml
   - dashboards/homelab-overview.yaml
