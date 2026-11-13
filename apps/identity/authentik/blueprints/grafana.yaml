@@ -1,4 +1,5 @@
-# OIDC client of Grafana (declared here, never by the admin UI). Only the references below name secrets: the client secret is read from
+# OIDC client of Grafana (declared here, never by the admin UI). The names carry a suffix: the restored data already holds a provider and an
+# application called `grafana`, which stay untouched. Only the references below name secrets: the client secret is read from
 # the environment of the worker. Redirect URIs are exact (strict matching), the user is the built-in admin group; no object restored from
 # the previous installation is named or changed.
 version: 1
@@ -9,10 +10,10 @@ entries:
     id: provider
     state: present
     identifiers:
-      name: grafana
+      name: grafana-k3s
     attrs:
       client_type: confidential
-      client_id: grafana
+      client_id: grafana-k3s
       client_secret:
         !Env AUTHENTIK_OIDC_GRAFANA_SECRET
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
@@ -29,9 +30,9 @@ entries:
     id: application
     state: present
     identifiers:
-      slug: grafana
+      slug: grafana-k3s
     attrs:
-      name: Grafana
+      name: Grafana (K3s)
       provider: !KeyOf provider
   - model: authentik_policies.policybinding
     state: present
