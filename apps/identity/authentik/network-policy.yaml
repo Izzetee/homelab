@@ -1,7 +1,6 @@
-# Authentik may be reached by the gateway on its HTTP port and reach cluster DNS and its database, nothing else; the server may also reach
-# the internet outside the private ranges on 443 (sign-in upstreams). The worker has no internet access in this mode (the rehearsal);
-# the mode after the rehearsal opens 443, 465 and 587 outside the private ranges and is switched by a change of this file. A LAN target
-# is added by name only when the restored data needs it.
+# Authentik may be reached by the gateway on its HTTP port and reach cluster DNS and its database, nothing else; the server and the worker
+# may also reach the internet outside the private ranges (the server on 443 for sign-in upstreams; the worker on 443, 465 and 587 for
+# web hooks and mail). A LAN target is added by name only when the restored data needs it.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -87,4 +86,18 @@ spec:
       toPorts:
         - ports:
             - port: "5432"
+              protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+            - port: "465"
+              protocol: TCP
+            - port: "587"
               protocol: TCP
