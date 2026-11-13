@@ -10,7 +10,7 @@ metadata:
   namespace: gateway
   annotations:
     # the target of the public records external-dns publishes for opted-in routes (never the LB address)
-    external-dns.alpha.kubernetes.io/target: 12556e89-5228-476b-8513-086a399abfba.cfargotunnel.com
+    external-dns.kubernetes.io/target: 12556e89-5228-476b-8513-086a399abfba.cfargotunnel.com
 spec:
   gatewayClassName: cilium
   addresses:
