@@ -1,0 +1,37 @@
+---
+# Compares the live Secret with the environment values inside one no_log fact; only a boolean and the guard text are
+# ever shown. The guard passes only when the Secret is read (a difference stops the run) or its absence is proven by the
+# API (NotFound). Any other failure (timeout, no permission, refused connection) stops the run: an unreadable Secret is
+# never taken for a missing one.
+- name: "Read the current guarded Secret"
+  ansible.builtin.command:
+    argv: [kubectl, get, secret, "{{ secret_bootstrap_item.name }}", --namespace, "{{ secret_bootstrap_item.namespace }}", --output, json]
+  register: secret_bootstrap_guarded
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: "Refuse when the Secret cannot be read and is not proven missing"
+  ansible.builtin.fail:
+    msg: "FAIL {{ secret_bootstrap_item.guard }} unreadable"
+  when: secret_bootstrap_guarded.rc != 0 and (secret_bootstrap_guarded.stderr | default('')) is not search('NotFound')
+
+- name: "Does the live Secret differ in any key?"
+  ansible.builtin.set_fact:
+    secret_bootstrap_guard_differs: >-
+      {%- set have = ((secret_bootstrap_guarded.stdout | from_json).data | default({})) if secret_bootstrap_guarded.rc == 0 else {} -%}
+      {%- set diff = namespace(any=false) -%}
+      {%- if secret_bootstrap_guarded.rc == 0 -%}
+      {%- for k in secret_bootstrap_item['keys'] -%}
+      {%- set want = k.literal if k.literal is defined else lookup('ansible.builtin.env', k.env) -%}
+      {%- if k.key not in have or (have[k.key] | b64decode) != want -%}{%- set diff.any = true -%}{%- endif -%}
+      {%- endfor -%}
+      {%- endif -%}
+      {{ diff.any }}
+  no_log: true
+
+- name: "Refuse to overwrite"
+  ansible.builtin.fail:
+    msg: "FAIL {{ secret_bootstrap_item.guard }} differs"
+  when: secret_bootstrap_guard_differs | bool
