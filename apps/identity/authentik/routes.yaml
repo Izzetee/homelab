@@ -14,7 +14,14 @@ spec:
   hostnames:
     - auth.chill-town.de
   rules:
-    - backendRefs:
+    # all traffic on this listener arrives over HTTPS at the edge: tell the application, so the addresses it builds are https
+    - filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
         - name: authentik-server
           port: 80
 ---
