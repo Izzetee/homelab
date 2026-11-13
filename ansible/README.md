@@ -15,7 +15,7 @@ ansible-galaxy collection install -r ansible/requirements.yml
 | `node-prep.yml` | packages, sshd drop-in, inotify sysctls, the Pod Security admission file on the server | none |
 | `k3s-cluster.yml` | pinned add-on manifests, token drop-in, K3s via k3s-ansible, token-file and kubeconfig checks | `K3S_TOKEN` |
 | `cilium.yml` | Gateway API CRDs (checksum) and the pinned Cilium chart with `apps/platform/cilium/values.yaml` | none |
-| `secret-bootstrap.yml` | the four bootstrap Secrets (one server-side apply per Secret with all its keys), values on file descriptors of `kubectl` | `CF_DNS01_TOKEN`, `CF_TUNNEL_TOKEN`, `GRAFANA_ADMIN_PASSWORD`, `ALERTMANAGER_DISCORD_WEBHOOK_URL` |
+| `secret-bootstrap.yml` | the seal key Secret of the secret store (one server-side apply, guarded against a different live value), value on a file descriptor of `kubectl` | `OPENBAO_SEAL_KEY` |
 | `argocd-bootstrap.yml` | ArgoCD from its pinned chart, the AppProject `platform` and the root app | none |
 
 The agents are in their own inventory group, so the first `k3s-cluster` run is limited to the server
