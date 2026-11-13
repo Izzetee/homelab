@@ -1,5 +1,5 @@
 # Blackbox exporter for the Probe objects of apps/observability/config (chart prometheus-community/prometheus-blackbox-exporter,
-# pinned in the Application). Two modules: no redirect is followed and the answer must be the exact expected one.
+# pinned in the Application). Three modules: no redirect is followed and the answer must be the exact expected one.
 image:
   tag: "v0.29.1"
   digest: "sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13"
@@ -26,6 +26,19 @@ config:
         preferred_ip_protocol: ip4
         tls_config:
           insecure_skip_verify: false
+    # OpenBao's active node: the served certificate's expiry is what is measured (the CA bundle lives in another namespace,
+    # so the chain is not verified here); 200 = unsealed and active
+    http_openbao_health:
+      prober: http
+      timeout: 10s
+      http:
+        method: GET
+        valid_status_codes: [200]
+        valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+        no_follow_redirects: true
+        preferred_ip_protocol: ip4
+        tls_config:
+          insecure_skip_verify: true
     dns_pihole:
       prober: dns
       timeout: 5s

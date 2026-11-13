@@ -29,3 +29,18 @@ spec:
     staticConfig:
       static:
         - 192.168.1.79:53
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: openbao-active
+  namespace: monitoring
+spec:
+  module: http_openbao_health
+  interval: 60s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://openbao-active.openbao.svc:8200/v1/sys/health
