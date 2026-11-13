@@ -34,6 +34,17 @@ spec:
         - k8sService:
             namespace: gateway
             serviceName: cilium-gateway-homelab
+    # the backends that may be reached through the tunnel: the gateway's proxy applies the policy of the connecting pod to the leg to the
+    # backend, so every public application is listed here (and nothing else is reachable through the tunnel)
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: server
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
     - toCIDRSet:
         - cidr: 0.0.0.0/0
           except:
