@@ -1,0 +1,18 @@
+# Namespaces of the platform services that are rolled out in several steps. They exist before their Applications, so every
+# object of those Applications can be checked against the cluster with a server-side dry run first.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-dns
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+# The identity provider. The public label lets its routes attach to the `tunnel` listener of the gateway (see
+# apps/platform/gateway/gateway.yaml); only exact hostnames are allowed there.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: authentik
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted

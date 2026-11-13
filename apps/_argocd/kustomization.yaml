@@ -14,6 +14,7 @@ resources:
   - cert-manager-issuers.yaml
   - gateway.yaml
   - cloudflared.yaml
+  - external-dns.yaml
   - argocd.yaml
   - observability-base.yaml
   - kube-prometheus-stack.yaml
