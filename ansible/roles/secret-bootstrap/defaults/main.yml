@@ -1,26 +1,10 @@
 ---
-# The only Kubernetes Secrets this role creates. Each key takes its value from an environment variable (`env`) or is a
+# The only Kubernetes Secret this role creates: the seal key of the secret store (the four former bootstrap Secrets are kept by
+# ExternalSecrets since the handover). Each key takes its value from an environment variable (`env`) or is a
 # fixed non-secret value (`literal`). An entry with `guard: <text>` is never overwritten: when the live Secret exists
 # with another value in any key, the role stops with `FAIL <text> differs` before it writes anything; a Secret that cannot be read
 # (and is not proven missing) stops it with `FAIL <text> unreadable`.
 secret_bootstrap_secrets:
-  - namespace: cert-manager
-    name: cloudflare-dns01
-    keys:
-      - {key: api-token, env: CF_DNS01_TOKEN}
-  - namespace: cloudflared
-    name: tunnel-token
-    keys:
-      - {key: token, env: CF_TUNNEL_TOKEN}
-  - namespace: monitoring
-    name: grafana-admin
-    keys:
-      - {key: admin-user, literal: admin}
-      - {key: admin-password, env: GRAFANA_ADMIN_PASSWORD}
-  - namespace: monitoring
-    name: alertmanager-receiver
-    keys:
-      - {key: webhook-url, env: ALERTMANAGER_DISCORD_WEBHOOK_URL}
   - namespace: openbao
     name: openbao-seal-key
     guard: seal key
