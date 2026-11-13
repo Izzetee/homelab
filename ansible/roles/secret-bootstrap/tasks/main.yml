@@ -31,6 +31,14 @@
     label: "{{ item.0.namespace }}/{{ item.0.name }}"
   no_log: true
 
+# A guarded Secret that exists with another value stops the run here, before the first namespace or Secret is written.
+- name: Guarded Secrets are not overwritten
+  ansible.builtin.include_tasks: guard.yml
+  loop: "{{ secret_bootstrap_secrets | selectattr('guard', 'defined') | list }}"
+  loop_control:
+    loop_var: secret_bootstrap_item
+    label: "{{ secret_bootstrap_item.namespace }}/{{ secret_bootstrap_item.name }}"
+
 - name: Namespaces and Secrets
   ansible.builtin.include_tasks: one.yml
   loop: "{{ secret_bootstrap_secrets }}"

@@ -1,6 +1,8 @@
 ---
 # The only Kubernetes Secrets this role creates. Each key takes its value from an environment variable (`env`) or is a
-# fixed non-secret value (`literal`).
+# fixed non-secret value (`literal`). An entry with `guard: <text>` is never overwritten: when the live Secret exists
+# with another value in any key, the role stops with `FAIL <text> differs` before it writes anything; a Secret that cannot be read
+# (and is not proven missing) stops it with `FAIL <text> unreadable`.
 secret_bootstrap_secrets:
   - namespace: cert-manager
     name: cloudflare-dns01
@@ -19,3 +21,8 @@ secret_bootstrap_secrets:
     name: alertmanager-receiver
     keys:
       - {key: webhook-url, env: ALERTMANAGER_DISCORD_WEBHOOK_URL}
+  - namespace: openbao
+    name: openbao-seal-key
+    guard: seal key
+    keys:
+      - {key: seal-key, env: OPENBAO_SEAL_KEY}

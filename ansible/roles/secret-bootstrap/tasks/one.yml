@@ -29,6 +29,15 @@
   check_mode: false
   no_log: true
 
+# A guarded Secret is written only when this read proved it (or its absence): a second failed read must not turn into a write.
+- name: "Refuse when a guarded Secret cannot be read and is not proven missing"
+  ansible.builtin.fail:
+    msg: "FAIL {{ secret_bootstrap_item.guard }} unreadable"
+  when:
+    - secret_bootstrap_item.guard is defined
+    - secret_bootstrap_current.rc != 0
+    - (secret_bootstrap_current.stderr | default('')) is not search('NotFound')
+
 - name: Is the Secret missing or different in any key?
   ansible.builtin.set_fact:
     secret_bootstrap_needed: >-
