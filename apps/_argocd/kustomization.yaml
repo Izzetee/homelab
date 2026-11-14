@@ -30,3 +30,4 @@ resources:
   - n8n.yaml
   - open-webui.yaml
   - affine.yaml
+  - juraticker.yaml

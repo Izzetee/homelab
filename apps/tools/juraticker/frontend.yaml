@@ -1,0 +1,122 @@
+# The news reader's page (nginx serving a built single-page app, proxying /api to the backend). The stock image starts as root on
+# port 80: here it runs as the nginx user, may bind the low port through the namespaced sysctl, and writes only to memory-backed
+# directories. The web root is copied once into one of them because the image writes its runtime configuration there.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: juraticker
+  labels:
+    app.kubernetes.io/name: juraticker
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: juraticker
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: juraticker
+        app.kubernetes.io/component: frontend
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      initContainers:
+        - name: web-root
+          image: ghcr.io/izzetee/lawnews/frontend
+          command: ["/bin/sh", "-c", "cp -a /usr/share/nginx/html/. /web-root/"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: html
+              mountPath: /web-root
+      containers:
+        - name: frontend
+          image: ghcr.io/izzetee/lawnews/frontend
+          envFrom:
+            - configMapRef:
+                name: frontend-config
+          env:
+            - name: OIDC_AUTHORITY
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: OIDC_AUTHORITY
+          ports:
+            - name: http
+              containerPort: 80
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: html
+              mountPath: /usr/share/nginx/html
+            - name: cache
+              mountPath: /var/cache/nginx
+            - name: run
+              mountPath: /run
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: html
+          emptyDir:
+            medium: Memory
+        - name: cache
+          emptyDir:
+            medium: Memory
+        - name: run
+          emptyDir:
+            medium: Memory
+        - name: tmp
+          emptyDir:
+            medium: Memory

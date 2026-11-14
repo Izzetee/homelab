@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: juraticker
+data:
+  GIN_MODE: release
+  PORT: "8080"
+  AZURE_OPENAI_REASONING_EFFORT: low
+  AZURE_OPENAI_MAX_COMPLETION_TOKENS: "4096"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: juraticker
+data:
+  OIDC_CLIENT_ID: RyD2gmUfu3btauNUH9GBxtl6BHE7hSQRxY0vokWH

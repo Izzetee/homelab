@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: juraticker-backup
+  namespace: juraticker
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - pvc.yaml
+  - config.yaml
+  - external-secrets.yaml
+  - cluster.yaml
+  - backend.yaml
+  - frontend.yaml
+  - service.yaml
+  - pg-dump.yaml
+  - routes.yaml
+  - network-policy.yaml
+images:
+  - name: ghcr.io/izzetee/lawnews/backend
+    newTag: eb9e89ff46e37f83e4a185bfff9cc2208df4f1a6
+    digest: sha256:2c528d6395e0d80288c728257c0dc485b43b7df44b9f1a33955cf03728af918d
+  - name: ghcr.io/izzetee/lawnews/frontend
+    newTag: eb9e89ff46e37f83e4a185bfff9cc2208df4f1a6
+    digest: sha256:8480ca7e99ea81f0f21cc131984a29ee6ca75e5c4f9484c537ef1f6e58d00756
