@@ -48,7 +48,7 @@
   ],
   "packageRules": [
     {
-      "description": "Private application images are pinned by the deploy script, not looked up",
+      "description": "Images of one registry path are not looked up",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/izzetee/lawnews/**"],
       "enabled": false
