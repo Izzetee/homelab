@@ -21,6 +21,7 @@ spec:
       filters:
         - type: RequestRedirect
           requestRedirect:
+            scheme: https
             path:
               type: ReplaceFullPath
               replaceFullPath: /status/zentral
