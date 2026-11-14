@@ -61,3 +61,13 @@ spec:
         - k8sService:
             namespace: gateway
             serviceName: cilium-gateway-homelab
+    # a request for a LAN name goes through the gateway's proxy, which connects to the backend with this policy: the dashboards' backend is listed
+    # so that the monitors can check it
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
