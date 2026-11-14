@@ -46,6 +46,12 @@ spec:
     - sourceLabels: [domain]
       regex: person|device_tracker
       action: drop
+    # the integration's metric prefix depends on its `namespace` setting; the dashboards and rules use `homeassistant_`
+    - sourceLabels: [__name__]
+      regex: hass_(.*)
+      targetLabel: __name__
+      replacement: homeassistant_$1
+      action: replace
   staticConfigs:
     - targets:
         - 192.168.1.30:8123
