@@ -1,0 +1,145 @@
+# promtool unit tests of homelab-nas-ha.yaml: one firing and one quiet case per rule. The rule file list is replaced by the
+# rendered rule files when the tests run. Series use neutral labels.
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  - name: nas scrape down
+    interval: 1m
+    input_series:
+      - series: 'up{job="nas",instance="nas"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasScrapeFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, job: nas, instance: nas}
+            exp_annotations: {summary: "The NAS is not scraped (SNMP exporter or NAS agent unreachable)"}
+  - name: nas scrape absent
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasScrapeFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, job: nas}
+            exp_annotations: {summary: "The NAS is not scraped (SNMP exporter or NAS agent unreachable)"}
+  - name: nas scrape up
+    interval: 1m
+    input_series:
+      - series: 'up{job="nas",instance="nas"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasScrapeFailed
+        exp_alerts: []
+  - name: nas volume above 80 percent
+    interval: 1m
+    input_series:
+      - series: 'raidFreeSize{job="nas",raidName="Volume 1"}'
+        values: '15+0x60'
+      - series: 'raidTotalSize{job="nas",raidName="Volume 1"}'
+        values: '100+0x60'
+      # a storage pool row at 95 % is left out
+      - series: 'raidFreeSize{job="nas",raidName="Storage Pool 1"}'
+        values: '5+0x60'
+      - series: 'raidTotalSize{job="nas",raidName="Storage Pool 1"}'
+        values: '100+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HomelabNasVolumeAbove80
+        exp_alerts:
+          - exp_labels: {severity: warning, job: nas, raidName: "Volume 1"}
+            exp_annotations: {summary: "NAS volume Volume 1 is more than 80 % full"}
+  - name: nas volume below 80 percent
+    interval: 1m
+    input_series:
+      - series: 'raidFreeSize{job="nas",raidName="Volume 1"}'
+        values: '50+0x60'
+      - series: 'raidTotalSize{job="nas",raidName="Volume 1"}'
+        values: '100+0x60'
+      - series: 'raidFreeSize{job="nas",raidName="Storage Pool 1"}'
+        values: '5+0x60'
+      - series: 'raidTotalSize{job="nas",raidName="Storage Pool 1"}'
+        values: '100+0x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HomelabNasVolumeAbove80
+        exp_alerts: []
+  - name: nas raid not normal
+    interval: 1m
+    input_series:
+      - series: 'raidStatus{job="nas",raidName="Volume 1"}'
+        values: '11+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasRaidNotNormal
+        exp_alerts:
+          - exp_labels: {severity: critical, job: nas, raidName: "Volume 1"}
+            exp_annotations: {summary: "NAS RAID Volume 1 is not in the normal state"}
+  - name: nas raid normal
+    interval: 1m
+    input_series:
+      - series: 'raidStatus{job="nas",raidName="Volume 1"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasRaidNotNormal
+        exp_alerts: []
+  - name: nas disk not normal
+    interval: 1m
+    input_series:
+      - series: 'diskStatus{job="nas",diskID="Disk 1"}'
+        values: '5+0x30'
+      - series: 'diskStatus{job="nas",diskID="Disk 2"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasDiskNotNormal
+        exp_alerts:
+          - exp_labels: {severity: critical, job: nas, diskID: "Disk 1"}
+            exp_annotations: {summary: "NAS disk Disk 1 is not in the normal state"}
+  - name: nas disks normal
+    interval: 1m
+    input_series:
+      - series: 'diskStatus{job="nas",diskID="Disk 1"}'
+        values: '1+0x30'
+      - series: 'diskStatus{job="nas",diskID="Disk 2"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabNasDiskNotNormal
+        exp_alerts: []
+  - name: home assistant scrape down
+    interval: 1m
+    input_series:
+      - series: 'up{job="home-assistant",instance="ha"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HomelabHomeAssistantScrapeFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, job: home-assistant, instance: ha}
+            exp_annotations: {summary: "Home Assistant metrics are not scraped (endpoint or token)"}
+  - name: home assistant scrape absent
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HomelabHomeAssistantScrapeFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, job: home-assistant}
+            exp_annotations: {summary: "Home Assistant metrics are not scraped (endpoint or token)"}
+  - name: home assistant scrape up
+    interval: 1m
+    input_series:
+      - series: 'up{job="home-assistant",instance="ha"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HomelabHomeAssistantScrapeFailed
+        exp_alerts: []

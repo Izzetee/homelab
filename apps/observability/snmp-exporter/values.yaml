@@ -1,0 +1,49 @@
+# SNMP exporter for the NAS (chart prometheus-community/prometheus-snmp-exporter, pinned in the Application). SNMPv3 only: the
+# `nas_v3` auth below holds only ${...} markers; the exporter expands them from the environment of the Secret `nas-snmp`
+# (--config.expand-environment-variables), so no user name or password is in Git. The modules (`synology`, `if_mib`) are the
+# image's default file, loaded as a second config file. The scrape itself is the ScrapeConfig `nas` in apps/observability/config.
+image:
+  # the chart renders `<repository>:<tag>`: the digest rides in the tag
+  tag: "v0.31.0@sha256:e5f1aba929145cea2a3bad89c29959efaec0dc26fb87e3761414616a1a392c1c"
+replicas: 1
+rbac:
+  create: false
+securityContext:
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi
+service:
+  type: ClusterIP
+  port: 9116
+serviceMonitor:
+  enabled: false
+  selfMonitor:
+    enabled: false
+config: |
+  auths:
+    nas_v3:
+      version: 3
+      security_level: authPriv
+      username: "${NAS_SNMP_USER}"
+      password: "${NAS_SNMP_AUTH_PASSWORD}"
+      auth_protocol: SHA
+      priv_protocol: AES
+      priv_password: "${NAS_SNMP_PRIV_PASSWORD}"
+extraArgs:
+  - --config.file=/etc/snmp_exporter/snmp.yml
+  - --config.expand-environment-variables
+envFrom:
+  - secretRef:
+      name: nas-snmp

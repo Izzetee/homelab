@@ -1,0 +1,47 @@
+# Alerts of the NAS (SNMP exporter, job `nas`) and of Home Assistant's metrics endpoint (job `home-assistant`). Status values of the
+# Synology MIB: 1 is normal for a RAID and for a disk. A "volume" is a row of the RAID table; storage-pool rows are left out.
+# Unit tests: tests/homelab-nas-ha.yaml (promtool).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-nas-ha
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab-nas-ha
+      rules:
+        - alert: HomelabNasScrapeFailed
+          expr: up{job="nas"} == 0 or absent(up{job="nas"})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The NAS is not scraped (SNMP exporter or NAS agent unreachable)"
+        - alert: HomelabNasVolumeAbove80
+          expr: 1 - raidFreeSize{job="nas",raidName!~"Storage Pool.*"} / (raidTotalSize{job="nas",raidName!~"Storage Pool.*"} > 0) > 0.8
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "NAS volume {{ $labels.raidName }} is more than 80 % full"
+        - alert: HomelabNasRaidNotNormal
+          expr: raidStatus{job="nas"} != 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NAS RAID {{ $labels.raidName }} is not in the normal state"
+        - alert: HomelabNasDiskNotNormal
+          expr: diskStatus{job="nas"} != 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "NAS disk {{ $labels.diskID }} is not in the normal state"
+        - alert: HomelabHomeAssistantScrapeFailed
+          expr: up{job="home-assistant"} == 0 or absent(up{job="home-assistant"})
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Home Assistant metrics are not scraped (endpoint or token)"

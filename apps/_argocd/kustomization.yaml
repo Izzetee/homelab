@@ -26,6 +26,7 @@ resources:
   - tempo.yaml
   - alloy.yaml
   - blackbox-exporter.yaml
+  - snmp-exporter.yaml
   - observability-config.yaml
   - n8n.yaml
   - open-webui.yaml

@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: snmp-exporter
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: observability
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: prometheus-snmp-exporter
+      targetRevision: 9.21.1
+      helm:
+        releaseName: prometheus-snmp-exporter
+        valueFiles:
+          - $values/apps/observability/snmp-exporter/values.yaml
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

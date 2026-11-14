@@ -1,5 +1,6 @@
 # Ingress to every pod of `monitoring`: from pods of `monitoring`; from the gateway to Grafana (3000); from cluster
-# endpoints to the Alloy OTLP ports (4317, 4318). Everything else is dropped; egress stays open (scrapes, probes, Discord).
+# endpoints to the Alloy OTLP ports (4317, 4318). Everything else is dropped; egress stays open (scrapes, probes, Discord) except
+# for the SNMP exporter and Prometheus, which have their own egress policies below.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -24,4 +25,45 @@ spec:
             - port: "4317"
               protocol: TCP
             - port: "4318"
+              protocol: TCP
+---
+# The SNMP exporter reaches only the NAS (UDP 161); it needs no DNS (the target is an address). Ingress stays with
+# `monitoring-ingress`.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: snmp-exporter
+  namespace: monitoring
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-snmp-exporter
+  egress:
+    - toCIDR:
+        - 192.168.1.117/32
+      toPorts:
+        - ports:
+            - port: "161"
+              protocol: UDP
+---
+# Prometheus reaches the cluster (all scrape targets, service discovery, Alertmanager, DNS), the API server and the Home
+# Assistant metrics port; nothing else. A selected egress policy turns on default-deny for this pod only.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  egress:
+    - toEntities:
+        - cluster
+        - kube-apiserver
+    - toCIDR:
+        - 192.168.1.30/32
+      toPorts:
+        - ports:
+            - port: "8123"
               protocol: TCP
