@@ -90,6 +90,39 @@ spec:
       namespace: authentik
   clusterResourceWhitelist: []
 ---
+# Small tools. They may read this repository only and deploy into their own namespaces; nothing cluster-wide, and none of the kinds that carry
+# credentials or permissions (the namespaces and their labels come from `networking/`).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  description: Small tools (static whiteboard, status monitor, workflow automation)
+  sourceRepos:
+    - https://github.com/Izzetee/homelab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: excalidraw
+    - server: https://kubernetes.default.svc
+      namespace: uptime-kuma
+    - server: https://kubernetes.default.svc
+      namespace: n8n
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: Secret
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: external-secrets.io
+      kind: ExternalSecret
+    - group: external-secrets.io
+      kind: SecretStore
+    - group: external-secrets.io
+      kind: PushSecret
+---
 # Nothing may use the default project: no source, no destination.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

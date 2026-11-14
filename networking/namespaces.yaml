@@ -16,3 +16,29 @@ metadata:
   labels:
     homelab.io/public: "true"
     pod-security.kubernetes.io/enforce: restricted
+---
+# Small tools that are reached through the public tunnel. The public label lets their routes attach to the `tunnel` listener of the gateway;
+# it is set here and never by the applications' own project.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: excalidraw
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uptime-kuma
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: n8n
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted
