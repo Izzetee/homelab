@@ -121,3 +121,34 @@ spec:
     staticConfig:
       static:
         - https://agent.chill-town.de/healthz
+---
+# The chat application and the document workspace by their public names, on their unauthenticated health paths.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: open-webui-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://gpt.chill-town.de/health
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: affine-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://affine.chill-town.de/info
