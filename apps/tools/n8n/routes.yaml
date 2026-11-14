@@ -1,0 +1,51 @@
+# Plain routes with exact hostnames and an explicit listener. The public name sits on the HTTP listener behind the tunnel (its record is an
+# existing one, moved only by a recorded cutover, so there is no DNS opt-in here); the LAN name on the HTTPS listener. The response headers
+# are those the previous front end added for this name.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: n8n
+  namespace: n8n
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - agent.chill-town.de
+  rules:
+    - filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: max-age=315360000; includeSubDomains; preload
+              - name: X-Content-Type-Options
+                value: nosniff
+              - name: X-XSS-Protection
+                value: 1; mode=block
+      backendRefs:
+        - name: n8n
+          port: 5678
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: n8n-lan
+  namespace: n8n
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - agent.lan.chill-town.de
+  rules:
+    - backendRefs:
+        - name: n8n
+          port: 5678
