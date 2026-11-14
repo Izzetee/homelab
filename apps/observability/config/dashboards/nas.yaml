@@ -243,7 +243,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "cpuUtilization{job=\"nas\"}",
+              "expr": "100 - ssCpuIdle{job=\"nas\"}",
               "instant": true,
               "legendFormat": "",
               "refId": "A"
@@ -304,7 +304,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "memUtilization{job=\"nas\"}",
+              "expr": "100 * (1 - (memAvailReal{job=\"nas\"} + memBuffer{job=\"nas\"} + memCached{job=\"nas\"}) / memTotalReal{job=\"nas\"})",
               "instant": true,
               "legendFormat": "",
               "refId": "A"
@@ -410,7 +410,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "cpuUtilization{job=\"nas\"}",
+              "expr": "100 - ssCpuIdle{job=\"nas\"}",
               "instant": false,
               "legendFormat": "CPU",
               "refId": "A"
@@ -420,7 +420,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "memUtilization{job=\"nas\"}",
+              "expr": "100 * (1 - (memAvailReal{job=\"nas\"} + memBuffer{job=\"nas\"} + memCached{job=\"nas\"}) / memTotalReal{job=\"nas\"})",
               "instant": false,
               "legendFormat": "Memory",
               "refId": "B"
