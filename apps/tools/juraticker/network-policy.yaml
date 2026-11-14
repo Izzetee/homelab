@@ -1,0 +1,147 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: juraticker
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: frontend
+  namespace: juraticker
+spec:
+  endpointSelector:
+    matchLabels:
+            app.kubernetes.io/component: frontend
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/component: backend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: backend
+  namespace: juraticker
+spec:
+  endpointSelector:
+    matchLabels:
+            app.kubernetes.io/component: backend
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/component: frontend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: juraticker-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: auth.chill-town.de
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: juraticker-db
+  namespace: juraticker
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: juraticker-db
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/component: backend
+        - matchLabels:
+            app.kubernetes.io/component: pg-dump
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: juraticker-pg-dump
+  namespace: juraticker
+spec:
+  endpointSelector:
+    matchLabels:
+            app.kubernetes.io/component: pg-dump
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: juraticker-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

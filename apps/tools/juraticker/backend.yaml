@@ -1,0 +1,115 @@
+# The news reader's API (Go). It starts at zero replicas and is scaled up by its own change once its data is in place.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: juraticker
+  labels:
+    app.kubernetes.io/name: juraticker
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: juraticker
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: juraticker
+        app.kubernetes.io/component: backend
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+        - name: ghcr-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: ghcr.io/izzetee/lawnews/backend
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: juraticker-db-app
+                  key: uri
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: AZURE_OPENAI_ENDPOINT
+            - name: AZURE_OPENAI_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: AZURE_OPENAI_MODEL
+            - name: OPENAI_GPT52_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: OPENAI_GPT52_KEY
+            - name: CORS_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: CORS_ORIGINS
+            - name: OIDC_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: OIDC_ISSUER
+            - name: OIDC_JWKS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-config
+                  key: OIDC_JWKS_URL
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory

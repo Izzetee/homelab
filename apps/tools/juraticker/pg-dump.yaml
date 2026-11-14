@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: juraticker-pg-dump
+  namespace: juraticker
+  labels:
+    app.kubernetes.io/name: juraticker-pg-dump
+    app.kubernetes.io/component: pg-dump
+    homelab.io/backup: "true"
+spec:
+  schedule: "15 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: juraticker-pg-dump
+            app.kubernetes.io/component: pg-dump
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 26
+            runAsGroup: 26
+            fsGroup: 26
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: dump
+              image: ghcr.io/cloudnative-pg/postgresql:16.16-standard-trixie@sha256:56ff6dee0ae923d9b796fe645f7d39c46e109952dbecdf560db4d2a9c243e02a
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  umask 077
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  pg_dump -Fc -h juraticker-db-r -U juraticker -d juraticker -f "/backup/juraticker-$stamp.dump"
+                  (cd /backup && sha256sum "juraticker-$stamp.dump" >"juraticker-$stamp.dump.sha256")
+                  cd /backup
+                  ls -1 juraticker-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
+                  echo "dump juraticker-$stamp.dump written"
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: juraticker-db-app
+                      key: password
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: juraticker-backup
+            - name: tmp
+              emptyDir: {}

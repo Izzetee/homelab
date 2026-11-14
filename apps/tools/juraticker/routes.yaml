@@ -1,0 +1,88 @@
+# Plain routes with exact hostnames and an explicit listener: the public names on the HTTP listener behind the tunnel, the LAN names on the HTTPS listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend
+  namespace: juraticker
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - juraticker.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
+        - name: frontend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend-lan
+  namespace: juraticker
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - juraticker.lan.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      backendRefs:
+        - name: frontend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend
+  namespace: juraticker
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - api-juraticker.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
+        - name: backend
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-lan
+  namespace: juraticker
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - api-juraticker.lan.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      backendRefs:
+        - name: backend
+          port: 8080

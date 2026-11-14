@@ -99,3 +99,21 @@ spec:
         - ports:
             - port: "3010"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: juraticker
+            app.kubernetes.io/name: juraticker
+            app.kubernetes.io/component: frontend
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: juraticker
+            app.kubernetes.io/name: juraticker
+            app.kubernetes.io/component: backend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
