@@ -41,6 +41,11 @@ spec:
     credentials:
       name: home-assistant-token
       key: token
+  # who is home and where never enters the cluster: the person and device_tracker domains are dropped here as well as at the source
+  metricRelabelings:
+    - sourceLabels: [domain]
+      regex: person|device_tracker
+      action: drop
   staticConfigs:
     - targets:
         - 192.168.1.30:8123
