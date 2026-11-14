@@ -1,0 +1,42 @@
+# Plain routes with exact hostnames and an explicit listener. The public name sits on the HTTP listener behind the tunnel (its record is an
+# existing one, moved only by a recorded cutover, so there is no DNS opt-in here); the LAN name on the HTTPS listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: excalidraw
+  namespace: excalidraw
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - excalidraw.chill-town.de
+  rules:
+    # everything on this listener arrives over HTTPS at the edge: tell the application
+    - filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
+        - name: excalidraw
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: excalidraw-lan
+  namespace: excalidraw
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - excalidraw.lan.chill-town.de
+  rules:
+    - backendRefs:
+        - name: excalidraw
+          port: 80

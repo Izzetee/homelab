@@ -38,6 +38,14 @@ spec:
     # backend, so every public application is listed here (and nothing else is reachable through the tunnel)
     - toEndpoints:
         - matchLabels:
+            k8s:io.kubernetes.pod.namespace: excalidraw
+            app.kubernetes.io/name: excalidraw
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
             k8s:io.kubernetes.pod.namespace: authentik
             app.kubernetes.io/name: authentik
             app.kubernetes.io/component: server
