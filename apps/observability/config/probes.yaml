@@ -152,3 +152,34 @@ spec:
     staticConfig:
       static:
         - https://affine.chill-town.de/info
+---
+# The news reader's page and its API by their public names.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: juraticker-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://juraticker.chill-town.de/
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: juraticker-api-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://api-juraticker.chill-town.de/health
