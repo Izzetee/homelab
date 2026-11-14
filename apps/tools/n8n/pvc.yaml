@@ -1,0 +1,28 @@
+# The application's data directory (the `data` subdirectory of this volume, mounted at the application's home folder) on a node-local volume
+# (kept when the claim is deleted), and the claim for the nightly backups on the cluster share (the share directory is <namespace>/<claim name>).
+# The local volume binds when the first pod that uses it is scheduled.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data
+  namespace: n8n
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-backup
+  namespace: n8n
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 2Gi

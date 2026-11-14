@@ -1,0 +1,109 @@
+# Nightly copy of the database (SQLite online backup, consistent while the application writes) and of the other files of the data directory (including the key file)
+# into the backup claim: `n8n-<UTC>.db.gz`, `n8n-<UTC>.tar.gz` and a `.sha256` for each, files private (umask 077), the 14 newest
+# kept. The data volume is mounted read-only; the pod lands on the node that holds it. The job fails loudly when there is no database.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: n8n-backup
+  namespace: n8n
+  labels:
+    app.kubernetes.io/name: n8n-backup
+    homelab.io/backup: "true"
+spec:
+  schedule: "30 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: n8n-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
+              command: ["python3", "-I", "-c"]
+              args:
+                - |
+                  import glob, gzip, hashlib, os, shutil, sqlite3, tarfile, time
+                  NAME, DB, DATA, OUT = "n8n", "database.sqlite", "/data", "/backup"
+                  os.umask(0o077)
+                  base = f"{NAME}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+                  tmp = f"{OUT}/.{base}.db"
+                  src = sqlite3.connect(f"file:{DATA}/{DB}?mode=ro", uri=True)
+                  dst = sqlite3.connect(tmp)
+                  src.backup(dst)
+                  dst.close()
+                  src.close()
+                  chk = sqlite3.connect(tmp)
+                  if chk.execute("pragma integrity_check").fetchone()[0] != "ok":
+                      raise SystemExit("integrity check of the copy failed")
+                  chk.close()
+                  with open(tmp, "rb") as f, gzip.open(f"{OUT}/{base}.db.gz", "wb") as g:
+                      shutil.copyfileobj(f, g)
+                  os.remove(tmp)
+                  skip = {DB, DB + "-wal", DB + "-shm", DB + "-journal"}
+                  with tarfile.open(f"{OUT}/{base}.tar.gz", "w:gz") as t:
+                      for entry in sorted(os.listdir(DATA)):
+                          if entry not in skip:
+                              t.add(os.path.join(DATA, entry), arcname=entry)
+                  for ext in ("db.gz", "tar.gz"):
+                      path = f"{OUT}/{base}.{ext}"
+                      h = hashlib.sha256()
+                      with open(path, "rb") as f:
+                          for chunk in iter(lambda: f.read(1 << 20), b""):
+                              h.update(chunk)
+                      with open(path + ".sha256", "w") as f:
+                          f.write(f"{h.hexdigest()}  {base}.{ext}\n")
+                      for old in sorted(glob.glob(f"{OUT}/{NAME}-*.{ext}"))[:-14]:
+                          os.remove(old)
+                          if os.path.exists(old + ".sha256"):
+                              os.remove(old + ".sha256")
+                  print(f"backup {base} written")
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  subPath: data
+                  readOnly: true
+                - name: backup
+                  mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: n8n-data
+                readOnly: true
+            - name: backup
+              persistentVolumeClaim:
+                claimName: n8n-backup
+            - name: tmp
+              emptyDir: {}
