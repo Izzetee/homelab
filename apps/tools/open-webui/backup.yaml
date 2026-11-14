@@ -1,0 +1,123 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: open-webui-backup
+  namespace: open-webui
+  labels:
+    app.kubernetes.io/name: open-webui-backup
+    homelab.io/backup: "true"
+spec:
+  schedule: "45 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: open-webui-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: docker.io/library/python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
+              command: ["python3", "-I", "-c"]
+              args:
+                - |
+                  import glob, gzip, hashlib, os, shutil, sqlite3, tarfile, time
+                  NAME, DATA, STAGE, OUT = "open-webui", "/data", "/stage", "/backup"
+                  os.umask(0o077)
+                  base = f"{NAME}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+
+                  def online_copy(src_path, dst_path):
+                      src = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True)
+                      dst = sqlite3.connect(dst_path)
+                      src.backup(dst)
+                      dst.close()
+                      src.close()
+                      chk = sqlite3.connect(dst_path)
+                      if chk.execute("pragma integrity_check").fetchone()[0] != "ok":
+                          raise SystemExit("integrity check of a copy failed")
+                      chk.close()
+
+                  tmp = f"{OUT}/.{base}.db"
+                  online_copy(f"{DATA}/webui.db", tmp)
+                  with open(tmp, "rb") as f, gzip.open(f"{OUT}/{base}.db.gz", "wb") as g:
+                      shutil.copyfileobj(f, g)
+                  os.remove(tmp)
+                  os.makedirs(f"{STAGE}/vector_db")
+                  online_copy(f"{DATA}/vector_db/chroma.sqlite3", f"{STAGE}/vector_db/chroma.sqlite3")
+                  skip = {"webui.db", "webui.db-wal", "webui.db-shm", "webui.db-journal"}
+                  skip_chroma = {"vector_db/chroma.sqlite3", "vector_db/chroma.sqlite3-wal", "vector_db/chroma.sqlite3-shm", "vector_db/chroma.sqlite3-journal"}
+                  with tarfile.open(f"{OUT}/{base}.tar.gz", "w:gz") as t:
+                      t.add(f"{STAGE}/vector_db/chroma.sqlite3", arcname="vector_db/chroma.sqlite3")
+                      for root, dirs, files in os.walk(DATA):
+                          rel_root = os.path.relpath(root, DATA)
+                          if rel_root == ".":
+                              dirs[:] = [d for d in dirs if d != "cache"]
+                          for name in files:
+                              rel = name if rel_root == "." else f"{rel_root}/{name}"
+                              if rel in skip or rel in skip_chroma:
+                                  continue
+                              t.add(os.path.join(root, name), arcname=rel, recursive=False)
+                  for ext in ("db.gz", "tar.gz"):
+                      path = f"{OUT}/{base}.{ext}"
+                      h = hashlib.sha256()
+                      with open(path, "rb") as f:
+                          for chunk in iter(lambda: f.read(1 << 20), b""):
+                              h.update(chunk)
+                      with open(path + ".sha256", "w") as f:
+                          f.write(f"{h.hexdigest()}  {base}.{ext}\n")
+                      for old in sorted(glob.glob(f"{OUT}/{NAME}-*.{ext}"))[:-14]:
+                          os.remove(old)
+                          if os.path.exists(old + ".sha256"):
+                              os.remove(old + ".sha256")
+                  print(f"backup {base} written")
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: backup
+                  mountPath: /backup
+                - name: stage
+                  mountPath: /stage
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: open-webui-data
+                readOnly: true
+            - name: backup
+              persistentVolumeClaim:
+                claimName: open-webui-backup
+            - name: stage
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
