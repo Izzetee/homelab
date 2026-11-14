@@ -13,8 +13,8 @@ resources:
   - network-policy.yaml
 images:
   - name: ghcr.io/izzetee/lawnews/backend
-    newTag: eb9e89ff46e37f83e4a185bfff9cc2208df4f1a6
-    digest: sha256:2c528d6395e0d80288c728257c0dc485b43b7df44b9f1a33955cf03728af918d
+    newTag: 1da7ba15f7d2af70da3483df3515f190b8b7a28a
+    digest: sha256:18a34910ecfa08744dafe0586706d93278c97633dfdb6b681df2be9acbf61b72
   - name: ghcr.io/izzetee/lawnews/frontend
-    newTag: eb9e89ff46e37f83e4a185bfff9cc2208df4f1a6
-    digest: sha256:8480ca7e99ea81f0f21cc131984a29ee6ca75e5c4f9484c537ef1f6e58d00756
+    newTag: 1da7ba15f7d2af70da3483df3515f190b8b7a28a
+    digest: sha256:d3f8b26961e049f80c4aafb01ddbcf834ea3b6225dd7bba16236a3f069d97453
