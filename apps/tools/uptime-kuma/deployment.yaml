@@ -101,6 +101,9 @@ spec:
               mountPath: /app/data
             - name: tmp
               mountPath: /tmp
+            - name: ping
+              mountPath: /ping
+              readOnly: true
       volumes:
         - name: ping
           emptyDir: {}
