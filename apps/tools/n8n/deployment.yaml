@@ -54,9 +54,6 @@ spec:
               value: "true"
             - name: EXECUTIONS_DATA_MAX_AGE
               value: "336"
-            # one-time: compact the database file at the next start; removed again right after
-            - name: DB_SQLITE_VACUUM_ON_STARTUP
-              value: "true"
           ports:
             - name: http
               containerPort: 5678
