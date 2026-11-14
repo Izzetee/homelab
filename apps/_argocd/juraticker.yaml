@@ -15,6 +15,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: juraticker
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
