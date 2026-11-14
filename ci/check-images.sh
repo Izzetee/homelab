@@ -6,6 +6,9 @@
 #   ci/check-images.sh [file ...]         default: stdin (kustomize build ... | ci/check-images.sh)
 # Prints `FAIL image <ref> <reason>` per finding and `OK images n=<count>`; exit 1 on any FAIL.
 # Platforms come from `docker buildx imagetools inspect` (index, or the image config of a single manifest).
+# One narrow exception: an image whose reference starts with ghcr.io/izzetee/lawnews/ and whose platforms cannot be read (the package is private) passes as
+# `SKIP image <ref> private` when it is digest-pinned and its pod template has a kubernetes.io/arch nodeSelector and an imagePullSecrets entry; every other
+# unreadable image fails, and a readable image is always checked.
 # YQ=<command> runs a local yq instead of the pinned image (tests, local use).
 set -euo pipefail
 
@@ -28,8 +31,9 @@ yq_docs <"$tmp/in.yaml" | jq -r '
     elif .kind == "CronJob" then .spec.jobTemplate.spec.template.spec
     elif (.kind | IN("Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "ReplicationController")) then .spec.template.spec
     else empty end;
-  select(type == "object") | pod | . as $p | ($p.nodeSelector["kubernetes.io/arch"] // "") as $a
-  | (($p.containers // []) + ($p.initContainers // []) + ($p.ephemeralContainers // []))[] | "\(.image)\t\($a)"' |
+  select(type == "object") | pod | . as $p | ($p.nodeSelector["kubernetes.io/arch"] // "-") as $a
+  | (if (($p.imagePullSecrets // []) | length) > 0 then "pull" else "-" end) as $s
+  | (($p.containers // []) + ($p.initContainers // []) + ($p.ephemeralContainers // []))[] | "\(.image)\t\($a)\t\($s)"' |
   sort -u >"$tmp/images.tsv"
 
 if [[ ! -s $tmp/images.tsv ]]; then
@@ -49,7 +53,7 @@ platforms() { # platforms <ref>: linux architectures, one per line; non-zero whe
 }
 
 fail=0 n=0
-while IFS=$'\t' read -r ref sel; do
+while IFS=$'\t' read -r ref sel pull; do
   n=$((n + 1))
   if [[ ! $ref =~ ^[^[:space:]@]+:[A-Za-z0-9_][A-Za-z0-9._-]*@sha256:[0-9a-f]{64}$ ]]; then
     echo "FAIL image $ref not digest-pinned"
@@ -57,11 +61,16 @@ while IFS=$'\t' read -r ref sel; do
     continue
   fi
   if ! pl=$(platforms "$ref") || [[ -z $pl ]]; then
+    if [[ $ref == ghcr.io/izzetee/lawnews/* && $sel != - && $pull == pull ]]; then
+      echo "SKIP image $ref private"
+      continue
+    fi
     echo "FAIL image $ref platforms unreadable"
     fail=1
     continue
   fi
-  need=${sel:-"amd64 arm64"}
+  need=$sel
+  [[ $need != - ]] || need="amd64 arm64"
   for a in $need; do
     if ! grep -qx "$a" <<<"$pl"; then
       echo "FAIL image $ref arch $a missing"
