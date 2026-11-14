@@ -1,0 +1,14 @@
+# Removes the provider and the application named `grafana` that were restored from the previous installation (the old Grafana is gone;
+# the current one is `grafana-k3s`). Exactly these two objects, identified by their exact slug and name; nothing else is named or changed.
+version: 1
+metadata:
+  name: homelab-remove-legacy-grafana
+entries:
+  - model: authentik_core.application
+    state: absent
+    identifiers:
+      slug: grafana
+  - model: authentik_providers_oauth2.oauth2provider
+    state: absent
+    identifiers:
+      name: grafana
