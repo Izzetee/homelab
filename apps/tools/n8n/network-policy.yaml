@@ -1,6 +1,6 @@
 # Nothing in the namespace may send or receive anything unless a policy says so: pods without a policy of their own (helper pods, backup jobs)
-# reach cluster DNS only. The application accepts the gateway on its port. While the data is being restored and checked it needs DNS only,
-# so no workflow can reach anything outside; a later change opens what the workflows need.
+# reach cluster DNS only. The application accepts the gateway on its port and may reach the internet outside the private ranges on the web and
+# mail ports; a local-network target is added by name only when a workflow needs it.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -44,4 +44,21 @@ spec:
       toPorts:
         - ports:
             - port: "5678"
+              protocol: TCP
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+            - port: "465"
+              protocol: TCP
+            - port: "587"
               protocol: TCP
