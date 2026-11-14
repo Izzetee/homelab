@@ -98,7 +98,7 @@ metadata:
   name: apps
   namespace: argocd
 spec:
-  description: Small tools (static whiteboard, status monitor, workflow automation)
+  description: Small tools (static whiteboard, status monitor, workflow automation, document workspace)
   sourceRepos:
     - https://github.com/Izzetee/homelab.git
   destinations:
@@ -108,6 +108,8 @@ spec:
       namespace: uptime-kuma
     - server: https://kubernetes.default.svc
       namespace: n8n
+    - server: https://kubernetes.default.svc
+      namespace: affine
   clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: ""
@@ -118,6 +120,31 @@ spec:
       kind: RoleBinding
     - group: external-secrets.io
       kind: ExternalSecret
+    - group: external-secrets.io
+      kind: SecretStore
+    - group: external-secrets.io
+      kind: PushSecret
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps-store
+  namespace: argocd
+spec:
+  description: Chat workspace (reads its secrets from the store)
+  sourceRepos:
+    - https://github.com/Izzetee/homelab.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: open-webui
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: Secret
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
     - group: external-secrets.io
       kind: SecretStore
     - group: external-secrets.io

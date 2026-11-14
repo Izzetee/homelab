@@ -19,6 +19,9 @@ path "secret/data/external-dns/*" {
 path "secret/data/monitoring/*" {
   capabilities = ["read"]
 }
+path "secret/data/open-webui/*" {
+  capabilities = ["read"]
+}
 path "secret/data/infisical/*" {
   capabilities = ["deny"]
 }
