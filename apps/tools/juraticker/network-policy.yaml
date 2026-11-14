@@ -31,7 +31,7 @@ metadata:
 spec:
   endpointSelector:
     matchLabels:
-            app.kubernetes.io/component: frontend
+      app.kubernetes.io/component: frontend
   enableDefaultDeny:
     ingress: true
     egress: true
@@ -59,7 +59,7 @@ metadata:
 spec:
   endpointSelector:
     matchLabels:
-            app.kubernetes.io/component: backend
+      app.kubernetes.io/component: backend
   enableDefaultDeny:
     ingress: true
     egress: true
@@ -133,7 +133,7 @@ metadata:
 spec:
   endpointSelector:
     matchLabels:
-            app.kubernetes.io/component: pg-dump
+      app.kubernetes.io/component: pg-dump
   enableDefaultDeny:
     ingress: true
     egress: true
