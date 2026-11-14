@@ -1,6 +1,5 @@
 # Nothing in the namespace may send or receive anything unless a policy says so: pods without a policy of their own (helper pods, backup jobs)
-# reach cluster DNS only. The application accepts the gateway on its port. While the data is being restored and checked it may reach DNS and send
-# ICMP echo into the local network for the ping proof, nothing else; a later change opens what the monitors need.
+# reach cluster DNS only. The application accepts the gateway on its port and may reach what its monitors check.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -46,9 +45,19 @@ spec:
             - port: "3001"
               protocol: TCP
   egress:
-    - toCIDR:
-        - 192.168.1.0/24
-      icmps:
-        - fields:
-            - type: 8
-              family: IPv4
+    # the monitors reach anything outside the cluster (the local network and the internet) on any port, ICMP echo included
+    - toEntities:
+        - world
+    # monitors of the cluster's own names (the load balancer address of the gateway) are answered by the gateway's proxy
+    - toEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+    - toServices:
+        - k8sService:
+            namespace: gateway
+            serviceName: cilium-gateway-homelab
