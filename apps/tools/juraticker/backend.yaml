@@ -1,4 +1,4 @@
-# The news reader's API (Go). It starts at zero replicas and is scaled up by its own change once its data is in place.
+# The news reader's API (Go).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
