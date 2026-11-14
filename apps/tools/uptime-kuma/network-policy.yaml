@@ -1,0 +1,54 @@
+# Nothing in the namespace may send or receive anything unless a policy says so: pods without a policy of their own (helper pods, backup jobs)
+# reach cluster DNS only. The application accepts the gateway on its port. While the data is being restored and checked it may reach DNS and send
+# ICMP echo into the local network for the ping proof, nothing else; a later change opens what the monitors need.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: uptime-kuma
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: uptime-kuma
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "3001"
+              protocol: TCP
+  egress:
+    - toCIDR:
+        - 192.168.1.0/24
+      icmps:
+        - fields:
+            - type: 8
+              family: IPv4

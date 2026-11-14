@@ -1,0 +1,96 @@
+# The public name forwards only what the public status pages need: the page and its data, the badges, the entry-page lookup, the static files
+# of the page shell, and `/` redirects to the main status page. The administration pages and the websocket are served on the LAN name only
+# (`status.lan.chill-town.de`, below), so a request for any other path on the public name finds no route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - status.chill-town.de
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /status/zentral
+            statusCode: 302
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /status/
+        - path:
+            type: PathPrefix
+            value: /api/status-page/
+        - path:
+            type: PathPrefix
+            value: /api/badge/
+        - path:
+            type: Exact
+            value: /api/entry-page
+        - path:
+            type: PathPrefix
+            value: /assets/
+        - path:
+            type: PathPrefix
+            value: /upload/
+        - path:
+            type: Exact
+            value: /manifest.json
+        - path:
+            type: Exact
+            value: /serviceWorker.js
+        - path:
+            type: Exact
+            value: /favicon.ico
+        - path:
+            type: Exact
+            value: /icon.svg
+        - path:
+            type: Exact
+            value: /icon.png
+        - path:
+            type: Exact
+            value: /icon-192x192.png
+        - path:
+            type: Exact
+            value: /icon-512x512.png
+        - path:
+            type: Exact
+            value: /apple-touch-icon.png
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
+        - name: uptime-kuma
+          port: 3001
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: uptime-kuma-lan
+  namespace: uptime-kuma
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - status.lan.chill-town.de
+  rules:
+    - backendRefs:
+        - name: uptime-kuma
+          port: 3001
