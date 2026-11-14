@@ -29,3 +29,4 @@ resources:
   - observability-config.yaml
   - n8n.yaml
   - open-webui.yaml
+  - affine.yaml
