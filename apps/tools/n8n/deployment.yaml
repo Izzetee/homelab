@@ -87,9 +87,13 @@ spec:
               subPath: data
             - name: tmp
               mountPath: /tmp
+            - name: cache
+              mountPath: /home/node/.cache
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: n8n-data
         - name: tmp
+          emptyDir: {}
+        - name: cache
           emptyDir: {}
