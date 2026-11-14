@@ -18,6 +18,7 @@ resources:
   - external-dns.yaml
   - authentik-db.yaml
   - authentik.yaml
+  - uptime-kuma.yaml
   - argocd.yaml
   - observability-base.yaml
   - kube-prometheus-stack.yaml

@@ -1,0 +1,27 @@
+# The application's data directory on a node-local volume (kept when the claim is deleted) and the claim for the nightly backups on the cluster
+# share (the share directory is <namespace>/<claim name>). The local volume binds when the first pod that uses it is scheduled.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uptime-kuma-data
+  namespace: uptime-kuma
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-retain
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uptime-kuma-backup
+  namespace: uptime-kuma
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 2Gi
