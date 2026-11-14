@@ -3,7 +3,11 @@ kind: Kustomization
 resources:
   - servicemonitors.yaml
   - probes.yaml
+  - scrapeconfigs.yaml
   - grafana-route.yaml
   - rules/homelab-rules.yaml
   - rules/homelab-secret-store.yaml
+  - rules/homelab-nas-ha.yaml
   - dashboards/homelab-overview.yaml
+  - dashboards/nas.yaml
+  - dashboards/home-assistant.yaml

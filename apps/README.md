@@ -50,16 +50,20 @@ as destinations):
 
 | Application | Wave | Content |
 |---|---|---|
-| `observability-base` | 2 | the two namespaces, the `grafana-sidecar` Role, the ingress policy of `monitoring` |
+| `observability-base` | 2 | the two namespaces, the `grafana-sidecar` Role, the ingress policy of `monitoring`, the egress policies of the SNMP exporter and Prometheus, the `ExternalSecret`s of the NAS SNMPv3 login and the Home Assistant token |
 | `kube-prometheus-stack` | 3 | Prometheus Operator and CRDs, Prometheus (30 days, local volume), Alertmanager (Discord), kube-state-metrics, node-exporter, Grafana |
-| `loki`, `tempo`, `alloy`, `blackbox-exporter` | 4 | Loki (14 days), Tempo (7 days), Alloy (pod logs and events through the API, OTLP), blackbox exporter |
-| `observability-config` | 5 | ServiceMonitors, probes, alert rules, the overview dashboard, the Grafana route |
+| `loki`, `tempo`, `alloy`, `blackbox-exporter`, `snmp-exporter` | 4 | Loki (14 days), Tempo (7 days), Alloy (pod logs and events through the API, OTLP), blackbox exporter, SNMP exporter (NAS over SNMPv3) |
+| `observability-config` | 5 | ServiceMonitors, probes, the scrape configs of the NAS and Home Assistant, alert rules, the overview, NAS and Home Assistant dashboards, the Grafana route |
 
 - Values files live next to the Application name (`observability/<application>/values.yaml`); every image is `tag@digest`.
 - Grafana is stateless: datasources and dashboards come from this repository (ConfigMaps with the label `grafana_dashboard`),
   edits in the UI are lost on a restart. It is served at `grafana.lan.chill-town.de` through the `lan` listener of the gateway. Its admin
   account and the Alertmanager Discord webhook come from the bootstrap Secrets `grafana-admin` and `alertmanager-receiver`
   (see `ansible/`); Alertmanager reads the webhook URL from a file of that Secret.
+- The NAS is scraped over SNMPv3 through the SNMP exporter (job `nas`, one 60 s scrape); its user and passwords are environment variables
+  of the exporter from the Secret `nas-snmp` (the config holds only `${…}` markers). Home Assistant's metrics endpoint is scraped
+  with a bearer token from the Secret `home-assistant-token` (job `home-assistant`); the token is the Home Assistant user's own long-lived
+  token and can call every Home Assistant service, so it belongs to a non-administrator account that may log in only from the local network.
 - Alert rules: `observability/config/rules/homelab-rules.yaml`, unit tests in `observability/config/rules/tests/` (promtool,
   outside the kustomization). Dashboards of the chart are the defaults for the scraped components; `homelab-overview` is ours.
 - Traces: send OTLP to `alloy.monitoring.svc:4317` (gRPC) or `:4318` (HTTP); Alloy forwards them to Tempo.
@@ -71,7 +75,7 @@ Removing the observability stack. Work from the top while ArgoCD still runs, so 
 
 1. `argocd app set --core root --sync-policy none`, then the same for every observability Application that syncs automatically.
 2. In reverse wave order, each with `argocd app delete --core <app> --cascade` and waiting until it is gone:
-   `observability-config`; `loki`, `tempo`, `alloy`, `blackbox-exporter`; `kube-prometheus-stack` (the Prometheus Operator CRDs go
+   `observability-config`; `loki`, `tempo`, `alloy`, `blackbox-exporter`, `snmp-exporter`; `kube-prometheus-stack` (the Prometheus Operator CRDs go
    with it); `observability-base` (the namespaces and the volumes in them go with it).
 3. Merge a revert of the change that added the Applications and the AppProject; delete the AppProject by hand if it stays behind
    (the `argocd` Application does not prune).
