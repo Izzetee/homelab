@@ -48,6 +48,12 @@
   ],
   "packageRules": [
     {
+      "description": "Private application images are pinned by the deploy script, not looked up",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/izzetee/lawnews/**"],
+      "enabled": false
+    },
+    {
       "description": "Wait three days after a release before proposing a version update",
       "matchUpdateTypes": ["major", "minor", "patch"],
       "minimumReleaseAge": "3 days"
