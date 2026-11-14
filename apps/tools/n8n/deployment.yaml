@@ -49,6 +49,14 @@ spec:
               value: https://agent.chill-town.de/
             - name: GENERIC_TIMEZONE
               value: Europe/Berlin
+            # drop stored executions older than 14 days (336 h, the image default made explicit)
+            - name: EXECUTIONS_DATA_PRUNE
+              value: "true"
+            - name: EXECUTIONS_DATA_MAX_AGE
+              value: "336"
+            # one-time: compact the database file at the next start; removed again right after
+            - name: DB_SQLITE_VACUUM_ON_STARTUP
+              value: "true"
           ports:
             - name: http
               containerPort: 5678
