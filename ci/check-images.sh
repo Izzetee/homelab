@@ -6,9 +6,6 @@
 #   ci/check-images.sh [file ...]         default: stdin (kustomize build ... | ci/check-images.sh)
 # Prints `FAIL image <ref> <reason>` per finding and `OK images n=<count>`; exit 1 on any FAIL.
 # Platforms come from `docker buildx imagetools inspect` (index, or the image config of a single manifest).
-# One narrow exception: an image whose reference starts with ghcr.io/izzetee/lawnews/ and whose platforms cannot be read (the package is private) passes as
-# `SKIP image <ref> private` when it is digest-pinned and its pod template has a kubernetes.io/arch nodeSelector and an imagePullSecrets entry; every other
-# unreadable image fails, and a readable image is always checked.
 # YQ=<command> runs a local yq instead of the pinned image (tests, local use).
 set -euo pipefail
 
