@@ -11,5 +11,6 @@ configMapGenerator:
     files:
       - blueprints/argocd.yaml
       - blueprints/grafana.yaml
+      - blueprints/remove-legacy-grafana.yaml
 generatorOptions:
   disableNameSuffixHash: true
