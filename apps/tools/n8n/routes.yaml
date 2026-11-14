@@ -14,7 +14,9 @@ spec:
   hostnames:
     - agent.chill-town.de
   rules:
-    - filters:
+    - timeouts:
+        request: 0s
+      filters:
         - type: RequestHeaderModifier
           requestHeaderModifier:
             set:
@@ -46,6 +48,8 @@ spec:
   hostnames:
     - agent.lan.chill-town.de
   rules:
-    - backendRefs:
+    - timeouts:
+        request: 0s
+      backendRefs:
         - name: n8n
           port: 5678
