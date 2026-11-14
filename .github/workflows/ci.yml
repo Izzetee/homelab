@@ -14,7 +14,7 @@ permissions: {}
 jobs:
   secrets:
     name: secrets
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -52,7 +52,7 @@ jobs:
 
   lint:
     name: lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -72,7 +72,7 @@ jobs:
 
   kubernetes:
     name: kubernetes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -124,7 +124,7 @@ jobs:
 
   ansible:
     name: ansible
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -142,7 +142,7 @@ jobs:
 
   tofu:
     name: tofu
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:
@@ -175,7 +175,7 @@ jobs:
     name: ci-ok
     if: always()
     needs: [secrets, lint, kubernetes, ansible, tofu]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {}
     steps:
       - name: Every job succeeded
