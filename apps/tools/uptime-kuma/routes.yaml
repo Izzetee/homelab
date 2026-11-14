@@ -14,7 +14,9 @@ spec:
   hostnames:
     - status.chill-town.de
   rules:
-    - matches:
+    - timeouts:
+        request: 0s
+      matches:
         - path:
             type: Exact
             value: /
@@ -26,7 +28,9 @@ spec:
               type: ReplaceFullPath
               replaceFullPath: /status/zentral
             statusCode: 302
-    - matches:
+    - timeouts:
+        request: 0s
+      matches:
         - path:
             type: PathPrefix
             value: /status/
@@ -92,6 +96,8 @@ spec:
   hostnames:
     - status.lan.chill-town.de
   rules:
-    - backendRefs:
+    - timeouts:
+        request: 0s
+      backendRefs:
         - name: uptime-kuma
           port: 3001

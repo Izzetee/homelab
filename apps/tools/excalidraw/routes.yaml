@@ -14,7 +14,9 @@ spec:
     - excalidraw.chill-town.de
   rules:
     # everything on this listener arrives over HTTPS at the edge: tell the application
-    - filters:
+    - timeouts:
+        request: 0s
+      filters:
         - type: RequestHeaderModifier
           requestHeaderModifier:
             set:
@@ -37,6 +39,8 @@ spec:
   hostnames:
     - excalidraw.lan.chill-town.de
   rules:
-    - backendRefs:
+    - timeouts:
+        request: 0s
+      backendRefs:
         - name: excalidraw
           port: 80
