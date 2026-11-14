@@ -42,3 +42,19 @@ metadata:
   labels:
     homelab.io/public: "true"
     pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-webui
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: affine
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted

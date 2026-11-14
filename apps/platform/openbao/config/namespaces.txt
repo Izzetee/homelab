@@ -5,3 +5,4 @@ cert-manager
 cloudflared
 external-dns
 monitoring
+open-webui
