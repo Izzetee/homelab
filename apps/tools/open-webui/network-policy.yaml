@@ -52,6 +52,34 @@ spec:
         - ports:
             - port: "8000"
               protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 100.64.0.0/10
+            - 169.254.0.0/16
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
+              protocol: TCP
+            - port: "11434"
+              protocol: TCP
+    - toCIDR:
+        - 192.168.1.108/32
+      toPorts:
+        - ports:
+            - port: "1234"
+              protocol: TCP
+    - toCIDR:
+        - 192.168.1.30/32
+      toPorts:
+        - ports:
+            - port: "9583"
+              protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -72,6 +100,21 @@ spec:
       toPorts:
         - ports:
             - port: "8000"
+              protocol: TCP
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 100.64.0.0/10
+            - 169.254.0.0/16
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+            - port: "443"
               protocol: TCP
 ---
 apiVersion: cilium.io/v2
@@ -108,3 +151,9 @@ spec:
           rules:
             dns:
               - matchPattern: "*"
+    - toCIDR:
+        - 192.168.1.117/32
+      toPorts:
+        - ports:
+            - port: "3306"
+              protocol: TCP

@@ -36,8 +36,6 @@ spec:
               value: /tmp
             - name: WEBUI_NAME
               value: Fragen und Antworten mit Poecksi
-            - name: HF_HUB_OFFLINE
-              value: "1"
             - name: WEBUI_SECRET_KEY
               valueFrom:
                 secretKeyRef:
