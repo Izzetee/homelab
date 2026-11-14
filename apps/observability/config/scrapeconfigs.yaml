@@ -1,4 +1,5 @@
-# Scrapes of two LAN devices. The NAS is read over SNMPv3 through the SNMP exporter (the exporter is the scrape address, the
+# Scrapes of two LAN devices. The NAS modules: Synology's own MIB, the interface table, and net-snmp's CPU and memory tables (the Synology
+# MIB of this DSM carries no CPU or memory values). The NAS is read over SNMPv3 through the SNMP exporter (the exporter is the scrape address, the
 # NAS is the `target` parameter); Home Assistant serves its own metrics endpoint and is read with a bearer token from a Secret.
 # The operator rejects a ScrapeConfig whose Secret key is missing, so nothing is scraped without the token.
 apiVersion: monitoring.coreos.com/v1alpha1
@@ -12,7 +13,7 @@ spec:
   scrapeInterval: 60s
   scrapeTimeout: 30s
   params:
-    module: [synology, if_mib]
+    module: [synology, if_mib, ucd_system_stats, ucd_memory]
     auth: [nas_v3]
   staticConfigs:
     - targets:
