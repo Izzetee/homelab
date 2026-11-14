@@ -1,0 +1,211 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-terminal
+  namespace: open-webui
+  labels:
+    app.kubernetes.io/name: open-terminal
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-terminal
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-terminal
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: open-terminal
+          image: ghcr.io/open-webui/open-terminal:latest@sha256:345150b81436ea622a8fd4ff9e70e01b8ad6d599425b8b3a52c31b856f9de600
+          command: ["/usr/bin/tini", "--", "bash", "-c"]
+          args:
+            - |
+              set -e
+              [ -f "$HOME/.bashrc" ] || cp /etc/skel/.bashrc "$HOME/.bashrc" 2>/dev/null || true
+              [ -f "$HOME/.profile" ] || cp /etc/skel/.profile "$HOME/.profile" 2>/dev/null || true
+              mkdir -p "$HOME/.local/bin"
+              if [ -n "${OPEN_TERMINAL_PIP_PACKAGES:-}" ]; then
+                echo "Installing pip packages: $OPEN_TERMINAL_PIP_PACKAGES"
+                pip install --no-cache-dir $OPEN_TERMINAL_PIP_PACKAGES
+              fi
+              exec python3 /usr/local/bin/open-terminal run
+          env:
+            - name: HOME
+              value: /home/user
+            - name: OPEN_TERMINAL_MAX_SESSIONS
+              value: "8"
+            - name: OPEN_TERMINAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-api-key
+                  key: api-key
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 128Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: home
+              mountPath: /home/user
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: open-terminal-home
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-terminal-mysql
+  namespace: open-webui
+  labels:
+    app.kubernetes.io/name: open-terminal-mysql
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: open-terminal-mysql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: open-terminal-mysql
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: open-terminal-mysql
+          image: ghcr.io/open-webui/open-terminal:latest@sha256:345150b81436ea622a8fd4ff9e70e01b8ad6d599425b8b3a52c31b856f9de600
+          command: ["/usr/bin/tini", "--", "bash", "-c"]
+          args:
+            - |
+              set -e
+              [ -f "$HOME/.bashrc" ] || cp /etc/skel/.bashrc "$HOME/.bashrc" 2>/dev/null || true
+              [ -f "$HOME/.profile" ] || cp /etc/skel/.profile "$HOME/.profile" 2>/dev/null || true
+              mkdir -p "$HOME/.local/bin"
+              if [ -n "${OPEN_TERMINAL_PIP_PACKAGES:-}" ]; then
+                echo "Installing pip packages: $OPEN_TERMINAL_PIP_PACKAGES"
+                pip install --no-cache-dir $OPEN_TERMINAL_PIP_PACKAGES
+              fi
+              exec python3 /usr/local/bin/open-terminal run
+          env:
+            - name: HOME
+              value: /home/user
+            - name: OPEN_TERMINAL_MAX_SESSIONS
+              value: "8"
+            - name: OPEN_TERMINAL_PIP_PACKAGES
+              value: pymysql
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-mysql-db
+                  key: db-host
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-mysql-db
+                  key: db-name
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-mysql-db
+                  key: db-user
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-mysql-db
+                  key: db-pass
+            - name: OPEN_TERMINAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: open-terminal-api-key
+                  key: api-key
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 128Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: home
+              mountPath: /home/user
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: open-terminal-mysql-home

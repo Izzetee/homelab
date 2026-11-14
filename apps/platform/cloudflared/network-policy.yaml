@@ -83,3 +83,11 @@ spec:
         - ports:
             - port: "5678"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: open-webui
+            app.kubernetes.io/name: open-webui
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
