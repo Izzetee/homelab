@@ -4,5 +4,6 @@ authentik
 cert-manager
 cloudflared
 external-dns
+juraticker
 monitoring
 open-webui

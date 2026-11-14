@@ -16,6 +16,9 @@ path "secret/data/cloudflared/*" {
 path "secret/data/external-dns/*" {
   capabilities = ["read"]
 }
+path "secret/data/juraticker/*" {
+  capabilities = ["read"]
+}
 path "secret/data/monitoring/*" {
   capabilities = ["read"]
 }
