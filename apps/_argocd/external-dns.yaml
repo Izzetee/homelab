@@ -25,6 +25,9 @@ spec:
       targetRevision: main
       path: apps/platform/external-dns
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
     syncOptions:
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
