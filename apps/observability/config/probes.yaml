@@ -75,3 +75,49 @@ spec:
     staticConfig:
       static:
         - https://auth.lan.chill-town.de/-/health/ready/
+---
+# The three small tools by their public names: the page itself, the public status page data, and the health path.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: excalidraw-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://excalidraw.chill-town.de/
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: status-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://status.chill-town.de/api/status-page/zentral
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: n8n-public
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://agent.chill-town.de/healthz
