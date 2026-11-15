@@ -53,6 +53,12 @@ spec:
         - ports:
             - port: "4000"
               protocol: TCP
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "15080"
+              protocol: TCP
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: monitoring

@@ -19,6 +19,11 @@ config:
 gateways:
   default:
     port: 4000
+  ui:
+    port: 15080
+ui:
+  gateways:
+    - ui
 llm:
   pathPrefix: /openai
   discovery: disabled
