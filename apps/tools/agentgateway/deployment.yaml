@@ -77,6 +77,16 @@ spec:
                 secretKeyRef:
                   name: azure-provider
                   key: AZURE_BASE_URL
+            - name: AGW_UI_OIDC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ui-oidc
+                  key: client-secret
+            - name: OIDC_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ui-oidc
+                  key: cookie-secret
             - name: UI_READ_ONLY
               value: "true"
           ports:
@@ -118,6 +128,9 @@ spec:
             - name: azure-key
               mountPath: /var/run/agentgateway/azure
               readOnly: true
+            - name: oidc-jwks
+              mountPath: /var/run/agentgateway/oidc
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
@@ -134,6 +147,12 @@ spec:
               - key: OPENAI_GPT52_KEY
                 path: OPENAI_GPT52_KEY
                 mode: 288
+        - name: oidc-jwks
+          configMap:
+            name: agentgateway-oidc-jwks
+            items:
+              - key: oidc-jwks.json
+                path: jwks.json
         - name: tmp
           emptyDir:
             medium: Memory

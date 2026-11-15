@@ -13,5 +13,9 @@ configMapGenerator:
     namespace: agentgateway
     files:
       - config.yaml
+  - name: agentgateway-oidc-jwks
+    namespace: agentgateway
+    files:
+      - oidc-jwks.json
 generatorOptions:
   disableNameSuffixHash: true

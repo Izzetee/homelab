@@ -5,6 +5,8 @@ config:
   sensitiveHeaders:
     - authorization
     - api-key
+    - cookie
+    - set-cookie
   tracing:
     otlpEndpoint: http://alloy.monitoring.svc.cluster.local:4317
     randomSampling: "true"
@@ -24,6 +26,23 @@ gateways:
 ui:
   gateways:
     - ui
+  policies:
+    oidc:
+      issuer: https://auth.lan.chill-town.de/application/o/agentgateway/
+      authorizationEndpoint: https://auth.lan.chill-town.de/application/o/authorize/
+      tokenEndpoint: https://auth.lan.chill-town.de/application/o/token/
+      jwks:
+        file: /var/run/agentgateway/oidc/jwks.json
+      clientId: agentgateway
+      clientSecret: $AGW_UI_OIDC_SECRET
+      redirectURI: https://agw.lan.chill-town.de/api/auth/callback
+      scopes:
+        - email
+        - profile
+    authorization:
+      rules:
+        - jwt.groups.contains("authentik Admins")
+    csrf: {}
 llm:
   pathPrefix: /openai
   discovery: disabled
