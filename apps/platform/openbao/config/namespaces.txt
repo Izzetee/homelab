@@ -9,3 +9,4 @@ garage
 juraticker
 monitoring
 open-webui
+wiki

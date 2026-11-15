@@ -117,3 +117,8 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: grafana
+    - name: AUTHENTIK_OIDC_OUTLINE_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: outline
