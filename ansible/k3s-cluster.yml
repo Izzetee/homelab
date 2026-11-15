@@ -43,6 +43,15 @@
             timeout: 300
           check_mode: false
 
+        - name: The K3s binary of the release for arm64 (checksum verified)
+          ansible.builtin.get_url:
+            url: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}/k3s-arm64"
+            dest: "{{ airgap_dir }}/k3s-arm64"
+            checksum: "sha256:{{ k3s_binary_checksum_arm64 }}"
+            mode: "0755"
+            timeout: 300
+          check_mode: false
+
         - name: The install script of the release tag (checksum verified)
           ansible.builtin.get_url:
             url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version | urlencode }}/install.sh"

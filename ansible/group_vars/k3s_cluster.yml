@@ -7,9 +7,10 @@ api_endpoint: 192.168.1.81
 kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
 # K3s binary and install script, fetched and checksum-verified on the controller (k3s-cluster.yml) and distributed by the
 # collection's airgap path: nothing is downloaded or executed unverified on a node. The binary is the release asset
-# (linux/amd64; the arm64 nodes of a later iteration need their own pin), the script is install.sh of the release tag.
+# (linux/amd64 and linux/arm64, each with its own pin from the release's sha256sum files), the script is install.sh of the release tag.
 airgap_dir: "{{ lookup('env', 'HOME') }}/.cache/k3smig/airgap"
 k3s_binary_checksum: b9a7c47aab81db66d0253378ddea0d06f8a6dca4dace7a26db3f00fa2f0e3717
+k3s_binary_checksum_arm64: bad32c0c798bce0e883216ed755bbfb3c6a9fbd9b9f1dee32a6be16d256ad033
 k3s_install_script_checksum: 40b487f0d8ef4f5d1bf422e7bb6228cc7789c40ecc66c5ab067d396bbee9816e
 # the configuration files the k3s_detect role writes (identical to what the collection would write), so a re-run can tell
 # "nothing changed" from "install and restart"

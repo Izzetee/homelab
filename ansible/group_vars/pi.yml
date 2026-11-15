@@ -1,0 +1,9 @@
+---
+# Raspberry Pi agents: registered with a class label and a taint (K3s applies both at registration; a later change needs
+# kubectl label/taint). Only workloads that tolerate homelab.io/pi run here (see apps/README.md).
+agent_config_yaml: |
+  pause-image: "{{ k3s_pause_image }}"
+  node-label:
+    - homelab.io/node-class=pi
+  node-taint:
+    - homelab.io/pi=true:NoSchedule

@@ -19,7 +19,9 @@ ansible-galaxy collection install -r ansible/requirements.yml
 | `argocd-bootstrap.yml` | ArgoCD from its pinned chart, the AppProject `platform` and the root app | none |
 
 The agents are in their own inventory group, so the first `k3s-cluster` run is limited to the server
-(`--limit server`).
+(`--limit server`). The Raspberry Pi agents (arm64) are the group `pi` inside `agent`: they register with the label
+`homelab.io/node-class=pi` and the taint `homelab.io/pi=true:NoSchedule` (`pi4-4` also carries `homelab.io/link=wifi`),
+and run with their own `--limit <host>`; the arm64 K3s binary has its own pinned checksum.
 
 `files/k3s-addons/` and `k3s-images.lock` hold the K3s bundled add-ons (CoreDNS, local-path provisioner, metrics-server)
 and the pause image, every image pinned by digest; they are generated for the pinned K3s version and refreshed
