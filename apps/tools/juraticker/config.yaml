@@ -6,6 +6,7 @@ metadata:
 data:
   GIN_MODE: release
   PORT: "8080"
+  AZURE_OPENAI_ENDPOINT: http://agentgateway.agentgateway.svc.cluster.local
   AZURE_OPENAI_REASONING_EFFORT: low
   AZURE_OPENAI_MAX_COMPLETION_TOKENS: "4096"
 ---
