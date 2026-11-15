@@ -1,0 +1,161 @@
+# Nightly copy of every bucket. The job reads through the in-cluster Service with a read-only key, mirrors the buckets, compares the
+# mirror byte by byte, and keeps the newest seven sets (archive, listing, checksums) on the NFS volume. The listing is read from the
+# mirror the archive is made from. It stops before any write when the stored bytes exceed the size budget.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: garage-mirror
+  namespace: garage
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: garage-backup
+  namespace: garage
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: garage-backup
+  namespace: garage
+  labels:
+    app.kubernetes.io/name: garage-backup
+    homelab.io/backup: "true"
+spec:
+  schedule: "50 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: garage-backup
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # the NFS export lists the three virtual machine nodes, which are the amd64 ones
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: docker.io/rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+              command: ["/bin/sh", "-ec"]
+              args:
+                - |
+                  umask 077
+                  MAX_BYTES=1073741824
+                  KEEP=7
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  total=$(rclone size garage: --json | sed -n 's/.*"bytes":\([0-9]*\).*/\1/p')
+                  if [ -z "$total" ]; then echo "backup: stored size unreadable"; exit 1; fi
+                  if [ "$total" -gt "$MAX_BYTES" ]; then echo "backup: $total stored bytes are above the budget of $MAX_BYTES"; exit 1; fi
+                  rm -f /backup/.partial-garage-*
+                  rclone sync garage: /mirror --create-empty-src-dirs
+                  rclone check --download garage: /mirror
+                  p=/backup/.partial-garage-$stamp
+                  {
+                    printf '{"created":"%s","rclone":"%s","buckets":{' "$stamp" "$(rclone version | sed -n '1s/^rclone //p')"
+                    first=1
+                    for b in $(rclone lsf /mirror --dirs-only | sed 's|/$||'); do
+                      j=$(rclone size "/mirror/$b" --json)
+                      n=$(printf '%s' "$j" | sed -n 's/.*"count":\([0-9]*\).*/\1/p')
+                      s=$(printf '%s' "$j" | sed -n 's/.*"bytes":\([0-9]*\).*/\1/p')
+                      if [ "$first" = 0 ]; then printf ','; fi
+                      first=0
+                      printf '"%s":{"objects":%s,"bytes":%s}' "$b" "$n" "$s"
+                    done
+                    printf '}}\n'
+                  } >"$p.json"
+                  (cd /mirror && find . -type f -print0 | xargs -r -0 sha256sum | sort -k2) >"$p.sha256sums"
+                  tar -czf "$p.tar.gz" -C /mirror .
+                  for e in json sha256sums tar.gz; do
+                    (cd /backup && sha256sum ".partial-garage-$stamp.$e" | sed "s|\.partial-||" >".partial-garage-$stamp.$e.sha256")
+                  done
+                  for e in tar.gz json sha256sums; do
+                    mv "$p.$e" "/backup/garage-$stamp.$e"
+                    mv "$p.$e.sha256" "/backup/garage-$stamp.$e.sha256"
+                  done
+                  cd /backup
+                  ls -1 garage-*.tar.gz | sort -r | tail -n +$((KEEP + 1)) | while read -r f; do
+                    base=${f%.tar.gz}
+                    rm -f "$base.tar.gz" "$base.tar.gz.sha256" "$base.json" "$base.json.sha256" "$base.sha256sums" "$base.sha256sums.sha256"
+                  done
+                  echo "backup garage-$stamp written: $total bytes"
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: RCLONE_CONFIG_GARAGE_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_GARAGE_PROVIDER
+                  value: Other
+                - name: RCLONE_CONFIG_GARAGE_ENDPOINT
+                  value: http://garage.garage.svc:3900
+                - name: RCLONE_CONFIG_GARAGE_REGION
+                  value: garage
+                - name: RCLONE_CONFIG_GARAGE_FORCE_PATH_STYLE
+                  value: "true"
+                - name: RCLONE_CONFIG_GARAGE_NO_CHECK_BUCKET
+                  value: "true"
+                - name: RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-s3
+                      key: access-key-id
+                - name: RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: garage-backup-s3
+                      key: secret-access-key
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: mirror
+                  mountPath: /mirror
+                - name: backup
+                  mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: mirror
+              persistentVolumeClaim:
+                claimName: garage-mirror
+            - name: backup
+              persistentVolumeClaim:
+                claimName: garage-backup
+            - name: tmp
+              emptyDir: {}

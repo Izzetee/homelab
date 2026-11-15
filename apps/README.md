@@ -42,6 +42,13 @@ behind with its objects. Work from the top while ArgoCD still runs:
 5. CRDs, StorageClasses, `Retain` volumes and their data stay until they are removed by hand, and only after no object of
    that kind is left.
 
+## Object storage
+
+`platform/garage/` is a single-node Garage (S3-compatible object store, Application `garage`, wave 4, namespace `garage`): StatefulSet on
+the node that holds its two local volumes, Services of type `ClusterIP`, an `HTTPRoute` on the `lan` listener only, network policies
+with default deny, `ExternalSecret`s for the key pair of the copy job and the RPC secret, and a CronJob that copies the buckets.
+`buckets.json` is the list of buckets, limits, key names and grants; see its README.
+
 ## Observability
 
 `observability/` holds the metrics, logs, traces, alerts and dashboards. Its Applications belong to the AppProject

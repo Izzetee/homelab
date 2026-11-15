@@ -8,6 +8,8 @@ resources:
   - rules/homelab-rules.yaml
   - rules/homelab-secret-store.yaml
   - rules/homelab-nas-ha.yaml
+  - rules/homelab-object-storage.yaml
   - dashboards/homelab-overview.yaml
   - dashboards/nas.yaml
   - dashboards/home-assistant.yaml
+  - dashboards/object-storage.yaml

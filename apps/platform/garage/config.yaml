@@ -1,0 +1,26 @@
+# Single-node layout: one replica of every partition, metadata in SQLite, both kinds of data synced to disk. No admin token and
+# no metrics token are configured, so the admin interface answers only the health and metrics paths. The RPC secret comes from
+# the environment (GARAGE_RPC_SECRET). Path-style addressing only (no root domain), no web or K2V endpoint.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-config
+  namespace: garage
+data:
+  garage.toml: |
+    metadata_dir = "/var/lib/garage/meta"
+    data_dir = "/var/lib/garage/data"
+    db_engine = "sqlite"
+    metadata_fsync = true
+    data_fsync = true
+    metadata_auto_snapshot_interval = "6h"
+    block_ram_buffer_max = "64MiB"
+    replication_factor = 1
+    rpc_bind_addr = "0.0.0.0:3901"
+
+    [s3_api]
+    s3_region = "garage"
+    api_bind_addr = "0.0.0.0:3900"
+
+    [admin]
+    api_bind_addr = "0.0.0.0:3903"
