@@ -232,6 +232,22 @@ spec:
       static:
         - https://agw.lan.chill-town.de/ui/login
 ---
+# The UI API must stay behind the login: without a session the exact answer is the 302 to the login page.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: agentgateway-ui-login-required
+  namespace: monitoring
+spec:
+  module: http_302
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://agw.lan.chill-town.de/api/config
+---
 # The gateway's admin endpoints must stay absent on both LAN names; a route that forwards one turns the 404 into another status.
 apiVersion: monitoring.coreos.com/v1
 kind: Probe

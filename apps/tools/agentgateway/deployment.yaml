@@ -87,8 +87,6 @@ spec:
                 secretKeyRef:
                   name: ui-oidc
                   key: cookie-secret
-            - name: UI_READ_ONLY
-              value: "true"
           ports:
             - name: http
               containerPort: 4000
