@@ -1,0 +1,26 @@
+# Attachments (local file storage) and the dumps of the nightly job, both on the shared NFS class.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wiki-data
+  namespace: wiki
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wiki-backup
+  namespace: wiki
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-k3s-data
+  resources:
+    requests:
+      storage: 2Gi

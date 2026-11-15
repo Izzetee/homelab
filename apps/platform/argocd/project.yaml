@@ -131,7 +131,7 @@ metadata:
   name: apps-store
   namespace: argocd
 spec:
-  description: Chat workspace and news reader (read their secrets from the store)
+  description: Chat workspace, news reader and wiki (read their secrets from the store)
   sourceRepos:
     - https://github.com/Izzetee/homelab.git
   destinations:
@@ -141,6 +141,8 @@ spec:
       namespace: juraticker
     - server: https://kubernetes.default.svc
       namespace: agentgateway
+    - server: https://kubernetes.default.svc
+      namespace: wiki
   clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: ""
