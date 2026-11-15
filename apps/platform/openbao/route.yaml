@@ -1,0 +1,41 @@
+# The store's API on the LAN listener only (a name below the LAN zone, never the tunnel), for exactly the paths a login and the agent
+# tools need: the OIDC login endpoints, the three calls on the caller's own token, the agent entries and the create-only app values.
+# Nothing under `sys/` is routed: the system endpoints, metrics and root-token generation stay reachable from inside the cluster only.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openbao
+  namespace: openbao
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - bao.lan.chill-town.de
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/auth/oidc/oidc/
+        - path:
+            type: Exact
+            value: /v1/auth/token/lookup-self
+        - path:
+            type: Exact
+            value: /v1/auth/token/renew-self
+        - path:
+            type: Exact
+            value: /v1/auth/token/revoke-self
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/agents/pi/
+        - path:
+            type: PathPrefix
+            value: /v1/secret/metadata/agents/pi/
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/apps/
+      backendRefs:
+        - name: openbao-active
+          port: 8200

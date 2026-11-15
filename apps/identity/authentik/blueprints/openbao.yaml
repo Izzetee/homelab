@@ -1,0 +1,65 @@
+# OIDC client of the secret store's login (declared here, never by the admin UI). The client secret is read from the environment of the
+# worker. The redirect URI is exact (strict matching) and local to the machine that runs the login; the user is the built-in admin group. The
+# provider has its own authorization flow with a consent stage that asks every time (the shipped explicit-consent flow remembers a consent for
+# a while), so each login is approved on the consent page. No object restored from the previous installation is named or changed.
+version: 1
+metadata:
+  name: homelab-oidc-openbao
+entries:
+  - model: authentik_stages_consent.consentstage
+    id: consent
+    state: present
+    identifiers:
+      name: openbao-authorization-consent
+    attrs:
+      mode: always_require
+  - model: authentik_flows.flow
+    id: flow
+    state: present
+    identifiers:
+      slug: openbao-authorization-explicit-consent
+    attrs:
+      designation: authorization
+      name: Authorize secret store login
+      title: Redirecting to %(app)s
+      authentication: require_authenticated
+  - model: authentik_flows.flowstagebinding
+    state: present
+    identifiers:
+      target: !KeyOf flow
+      stage: !KeyOf consent
+      order: 10
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider
+    state: present
+    identifiers:
+      name: openbao
+    attrs:
+      client_type: confidential
+      client_id: openbao
+      client_secret:
+        !Env AUTHENTIK_OIDC_OPENBAO_SECRET
+      authorization_flow: !KeyOf flow
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:8250/oidc/callback
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+  - model: authentik_core.application
+    id: application
+    state: present
+    identifiers:
+      slug: openbao
+    attrs:
+      name: OpenBao
+      provider: !KeyOf provider
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf application
+      group: !Find [authentik_core.group, [name, authentik Admins]]
+      order: 0

@@ -1,0 +1,20 @@
+# The public certificate of the secret store's internal CA (no key), so the gateway can verify the store on the re-encrypted leg
+# (backend-tls.yaml). It is the `ca.crt` of the Secret `openbao-ca`; the CA renews about every ten years, and then this file is replaced by the
+# same extraction (the recovery notes say how).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openbao-ca-public
+  namespace: openbao
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBbTCCARSgAwIBAgIUGYh3JW55yX36qlPH8IMEQHgCfp8wCgYIKoZIzj0EAwIw
+    FTETMBEGA1UEAxMKb3BlbmJhby1jYTAeFw0yNjExMTMwNDAwNTJaFw0zNjExMTAw
+    NDAwNTJaMBUxEzARBgNVBAMTCm9wZW5iYW8tY2EwWTATBgcqhkjOPQIBBggqhkjO
+    PQMBBwNCAAS822kNm2skRfaGpFtPDZpfFK3qGE03+KVSHOGyIMwL/a21Xj7aN3Me
+    jryULeZlHE+uwJ1ITPSLJ6uUGrvsjgk/o0IwQDAOBgNVHQ8BAf8EBAMCAqQwDwYD
+    VR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUsA2QLEZy0sJcbnBZyfLNDT515rcwCgYI
+    KoZIzj0EAwIDRwAwRAIgfihpeQB047fAyG8m3GAM0lcNu1ZFfKmRJyyReX54qu4C
+    ICQE0a2TdU/jAwGb7JmRplIcth8CKl4yDlINMZR7x1nl
+    -----END CERTIFICATE-----

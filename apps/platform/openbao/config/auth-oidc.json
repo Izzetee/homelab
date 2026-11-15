@@ -1,0 +1,5 @@
+{
+  "oidc_discovery_url": "https://auth.lan.chill-town.de/application/o/openbao/",
+  "oidc_client_id": "openbao",
+  "default_role": "agents"
+}
