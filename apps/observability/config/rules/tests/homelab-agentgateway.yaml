@@ -137,6 +137,8 @@ tests:
         values: '0+1x19'
       - series: 'agentgateway_requests_total{listener="ui",route="unknown",status="404"}'
         values: '0+1x19'
+      - series: 'agentgateway_requests_total{listener="ui",route="internal/ui-login",status="200"}'
+        values: '0+1x19'
       - series: 'agentgateway_requests_total{listener="default",route="unknown",status="401"}'
         values: '0+1x19'
     alert_rule_test:
