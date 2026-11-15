@@ -1,0 +1,16 @@
+# Extra CoreDNS server block (imported by the pinned CoreDNS as /etc/coredns/custom/*.server). The LAN zone is answered by the
+# Pi-hole; the router's resolver is the fallback and is asked only when the Pi-hole does not answer (not on NXDOMAIN).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  lan.server: |
+    poecki.local:53 {
+        errors
+        cache 30
+        forward . 192.168.1.79 192.168.1.1 {
+            policy sequential
+        }
+    }

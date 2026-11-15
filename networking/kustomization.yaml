@@ -4,3 +4,4 @@ resources:
   - lb-pool.yaml
   - l2-policy.yaml
   - namespaces.yaml
+  - coredns-custom.yaml
