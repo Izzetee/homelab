@@ -18,3 +18,15 @@ all:
               ansible_host: 192.168.1.82
             k3s-agent-2:
               ansible_host: 192.168.1.83
+          children:
+            # Raspberry Pi agents (arm64, Ubuntu on SD cards), tainted so that only workloads that tolerate it run there
+            pi:
+              hosts:
+                pi4-3:
+                  ansible_host: 192.168.1.189
+                pi4-2:
+                  ansible_host: 192.168.1.94
+                pi4-4:
+                  ansible_host: 192.168.1.71
+                pi4-1:
+                  ansible_host: 192.168.1.60

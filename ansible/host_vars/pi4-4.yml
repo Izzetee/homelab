@@ -1,0 +1,9 @@
+---
+# pi4-4 has no cable: it joins over WiFi and carries the link label so that workloads can keep off it.
+agent_config_yaml: |
+  pause-image: "{{ k3s_pause_image }}"
+  node-label:
+    - homelab.io/node-class=pi
+    - homelab.io/link=wifi
+  node-taint:
+    - homelab.io/pi=true:NoSchedule
