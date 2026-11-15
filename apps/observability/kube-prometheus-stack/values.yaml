@@ -30,6 +30,20 @@ kubeProxy:
 coreDns:
   enabled: false
 
+# K3s runs the control plane in one process and serves its whole metric registry on the kubelet port too: every API server,
+# etcd and scheduler series then exists twice, as job `apiserver` and as job `kubelet` (about 80000 of the 230000 head series).
+# The `apiserver` job keeps the copy the default rules and dashboards read; the duplicate is dropped at the kubelet endpoint.
+# The first entry is the chart's own default for this list, kept because a list in values replaces it.
+kubelet:
+  serviceMonitor:
+    metricRelabelings:
+      - action: drop
+        sourceLabels: [__name__, le]
+        regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
+      - action: drop
+        sourceLabels: [__name__]
+        regex: (apiserver|etcd|aggregator|apiextensions|authentication|authorization|scheduler|watch_cache|field_validation|admission|endpoint_slice|cardinality_enforcement|kubernetes_feature)_.*
+
 alertmanager:
   # Warning and critical alerts go to Discord; the webhook URL is read from a file of the Secret `alertmanager-receiver`
   # (mounted below), it never appears in this repository.
