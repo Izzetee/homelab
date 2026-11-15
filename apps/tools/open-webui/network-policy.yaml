@@ -52,6 +52,14 @@ spec:
         - ports:
             - port: "8000"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: agentgateway
+            app.kubernetes.io/name: agentgateway
+      toPorts:
+        - ports:
+            - port: "4000"
+              protocol: TCP
     - toCIDRSet:
         - cidr: 0.0.0.0/0
           except:

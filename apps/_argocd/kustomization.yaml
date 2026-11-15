@@ -33,3 +33,4 @@ resources:
   - open-webui.yaml
   - affine.yaml
   - juraticker.yaml
+  - agentgateway.yaml

@@ -81,3 +81,23 @@ spec:
         - action: replace
           targetLabel: job
           replacement: external-secrets
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agentgateway
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - agentgateway
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway
+  endpoints:
+    - port: metrics
+      interval: 30s
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: agentgateway

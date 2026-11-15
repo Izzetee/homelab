@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-agentgateway
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab-agentgateway
+      rules:
+        - alert: AgentgatewayDown
+          expr: (sum(kube_deployment_status_replicas_available{namespace="agentgateway", deployment="agentgateway"}) or vector(0)) < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No ready agentgateway pod"
+        - alert: AgentgatewayUpstreamErrors
+          expr: sum(rate(agentgateway_requests_total{status=~"5.."}[15m])) / sum(rate(agentgateway_requests_total[15m])) > 0.2 and sum(increase(agentgateway_requests_total[15m])) >= 5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "More than 20 % of the agentgateway requests end in a 5xx answer"
+        - alert: AgentgatewayRateLimited
+          expr: sum by (client) (increase(agentgateway_requests_total{status="429"}[30m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Client {{ $labels.client }} was rate limited by agentgateway in the last 30 minutes"

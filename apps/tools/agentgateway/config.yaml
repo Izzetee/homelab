@@ -1,0 +1,80 @@
+config:
+  adminAddr: 127.0.0.1:15000
+  session:
+    key: disabled
+  sensitiveHeaders:
+    - authorization
+    - api-key
+  tracing:
+    otlpEndpoint: http://alloy.monitoring.svc.cluster.local:4317
+    randomSampling: "true"
+  metrics:
+    fields:
+      add:
+        client: apiKey.client
+  logging:
+    fields:
+      add:
+        client: apiKey.client
+gateways:
+  default:
+    port: 4000
+llm:
+  pathPrefix: /openai
+  discovery: disabled
+  policies:
+    apiKey:
+      mode: strict
+      location:
+        expression: '"api-key" in request.headers ? request.headers["api-key"] : request.headers["authorization"].stripPrefix("Bearer ")'
+      keys:
+        - keyHash: $AGW_HASH_JURATICKER
+          metadata:
+            client: juraticker
+          allowedModels:
+            - $AZURE_OPENAI_MODEL
+        - keyHash: $AGW_HASH_OPEN_WEBUI
+          metadata:
+            client: open-webui
+        - keyHash: $AGW_HASH_MAC
+          metadata:
+            client: mac
+    localRateLimit:
+      - type: requests
+        maxTokens: 60
+        tokensPerFill: 60
+        fillInterval: 60s
+        key: apiKey.client
+      - type: tokens
+        maxTokens: 500000
+        tokensPerFill: 500000
+        fillInterval: 1h
+        key: apiKey.client
+  models:
+    - name: $AZURE_OPENAI_MODEL
+      provider: openAI
+      params:
+        baseUrl: $AZURE_BASE_URL
+      auth:
+        key:
+          value:
+            file: /var/run/agentgateway/azure/OPENAI_GPT52_KEY
+          location:
+            header:
+              name: api-key
+      requestHeaders:
+        remove:
+          - authorization
+    - name: lmstudio/*
+      provider:
+        custom:
+          formats:
+            - type: completions
+      params:
+        baseUrl: http://192.168.1.108:1234/v1
+      transformation:
+        model: llmRequest.model.stripPrefix("lmstudio/")
+      requestHeaders:
+        remove:
+          - authorization
+          - api-key
