@@ -29,8 +29,10 @@ spec:
         - ports:
             - port: "8200"
               protocol: TCP
+    # the gateway's proxy, for the LAN route of the store's API (route.yaml)
     - fromEntities:
         - host
+        - ingress
       toPorts:
         - ports:
             - port: "8200"
@@ -47,6 +49,27 @@ spec:
             - port: "8201"
               protocol: TCP
   egress:
+    # the sign-in provider's discovery document is fetched by its LAN name, which the gateway's proxy answers: the proxy applies this policy to
+    # its leg to the identity server, so that port is listed
+    - toEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toServices:
+        - k8sService:
+            namespace: gateway
+            serviceName: cilium-gateway-homelab
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: server
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: kube-system
