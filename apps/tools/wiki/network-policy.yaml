@@ -1,0 +1,156 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: wiki
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+# The wiki reaches its database, its cache and the identity provider through the gateway (sign-in and token exchange use the LAN name), nothing
+# else: no internet, no other cluster service.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: outline
+  namespace: wiki
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: outline
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: redis
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: wiki-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    # a request for a LAN name goes through the gateway's proxy, which connects to the backend with this policy: the identity server's port is listed
+    - toEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toServices:
+        - k8sService:
+            namespace: gateway
+            serviceName: cilium-gateway-homelab
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: server
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: redis
+  namespace: wiki
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: outline
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wiki-db
+  namespace: wiki
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: wiki-db
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: outline
+        - matchLabels:
+            app.kubernetes.io/name: wiki-pg-dump
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: wiki-pg-dump
+  namespace: wiki
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: wiki-pg-dump
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: wiki-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

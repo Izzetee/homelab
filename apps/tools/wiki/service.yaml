@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: outline
+  namespace: wiki
+  labels:
+    app.kubernetes.io/name: outline
+spec:
+  selector:
+    app.kubernetes.io/name: outline
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: wiki
+  labels:
+    app.kubernetes.io/name: redis
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis

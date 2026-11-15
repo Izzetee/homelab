@@ -34,3 +34,4 @@ resources:
   - affine.yaml
   - juraticker.yaml
   - agentgateway.yaml
+  - wiki.yaml
