@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Stand-in for the OpenBao CLI in the helper's self-test: a tiny store, a token with a time to live, and a log of every call (arguments
+and request kinds, never payloads). Only the calls homelab-bao makes are implemented."""
+import json
+import os
+import sys
+
+D = os.environ["STUB_DIR"]
+
+
+def load():
+    p = os.path.join(D, "state.json")
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {"tk": None, "ttl": 3600, "revoked": False, "kv": {}, "versions": {}}
+
+
+def save(s):
+    with open(os.path.join(D, "state.json"), "w", encoding="utf-8") as fh:
+        json.dump(s, fh)
+
+
+def log(name, line):
+    with open(os.path.join(D, name), "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+
+
+def deny():
+    print("Error: permission denied", file=sys.stderr)
+    sys.exit(2)
+
+
+a = sys.argv[1:]
+log("argv.log", " ".join(a))
+s = load()
+if a[:1] == ["version"]:
+    print(os.environ.get("STUB_VERSION", "OpenBao v2.7.2 (stub), built 2026-10-26"))
+    sys.exit(0)
+if a[:1] == ["login"]:
+    if os.environ.get("STUB_LOGIN_FAIL"):
+        sys.exit(1)
+    s["tk"] = "stubtoken-" + os.environ["STUB_TOKEN_SUFFIX"]
+    s["ttl"] = int(os.environ.get("STUB_TTL", "3600"))
+    s["revoked"] = False
+    save(s)
+    log("requests.log", "LOGIN")
+    print(s["tk"])
+    sys.exit(0)
+tok = os.environ.get("BAO_TOKEN")
+if tok is None or tok != s["tk"] or s["revoked"] or s["ttl"] <= 0:
+    deny()
+if a[:2] == ["token", "lookup"]:
+    log("requests.log", "LOOKUP")
+    print(json.dumps({"data": {"policies": ["default", "apps-create", "agents-read"], "ttl": s["ttl"], "renewable": True}}))
+elif a[:2] == ["token", "renew"]:
+    log("requests.log", "RENEW")
+    s["ttl"] = 3600
+    save(s)
+    print(json.dumps({"auth": {"lease_duration": 3600}}))
+elif a[:3] == ["token", "revoke", "-self"]:
+    log("requests.log", "REVOKE")
+    s["revoked"] = True
+    save(s)
+elif a[:1] == ["list"]:
+    log("requests.log", "LIST")
+    print(json.dumps(sorted(k.split("/")[2] for k in s["kv"] if k.startswith("agents/pi/"))))
+elif a[:1] == ["read"]:
+    path = a[-1].split("secret/data/", 1)[1]
+    log("requests.log", "READ " + path)
+    if not path.startswith("agents/pi/") or path not in s["kv"]:
+        deny()
+    print(json.dumps({"data": {"data": s["kv"][path], "metadata": {"version": s["versions"].get(path, 1)}}}))
+elif a[:1] == ["write"]:
+    path = a[1].split("secret/data/", 1)[1]
+    log("requests.log", "WRITE " + path)
+    if not path.startswith("apps/") or path in s["kv"]:
+        deny()
+    with open(a[2][1:], encoding="utf-8") as fh:
+        payload = json.load(fh)
+    s["kv"][path] = payload["data"]
+    s["versions"][path] = 1
+    save(s)
+else:
+    sys.exit(3)

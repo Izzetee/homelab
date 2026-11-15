@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Stand-in for curl in the Access tool's self-test: reads curl's config from stdin (method, url, headers, body), answers from a state file
+and logs `<METHOD> <path> token=<dns|access|other>` (never a token or a body) to requests.log; a refused call exits 22 like `curl --fail`."""
+import json
+import os
+import re
+import sys
+
+D = os.environ["STUB_DIR"]
+cfg = sys.stdin.read()
+with open(os.path.join(D, "argv.log"), "a", encoding="utf-8") as fh:
+    fh.write(" ".join(sys.argv[1:]) + "\n")
+
+
+def field(name):
+    m = re.search(r'^' + name + r' = "((?:[^"\\]|\\.)*)"$', cfg, re.M)
+    return re.sub(r"\\(.)", r"\1", m.group(1)) if m else ""
+
+
+method, url, body = field("request"), field("url"), field("data-raw")
+auth = re.search(r'Authorization: Bearer ([^"\s]+)', cfg)
+tok = auth.group(1) if auth else ""
+cls = "dns" if tok == os.environ["STUB_DNS"] else "access" if tok == os.environ["STUB_ACCESS"] else "other"
+path = url.split("/client/v4/", 1)[1]
+with open(os.path.join(D, "requests.log"), "a", encoding="utf-8") as fh:
+    fh.write(f"{method} {path.split('?')[0]} via={cls}\n")
+with open(os.path.join(D, "state.json"), encoding="utf-8") as fh:
+    s = json.load(fh)
+
+
+def save():
+    with open(os.path.join(D, "state.json"), "w", encoding="utf-8") as fh:
+        json.dump(s, fh)
+
+
+def ok(result, extra=None):
+    print(json.dumps(dict({"success": True, "result": result}, **(extra or {}))))
+    sys.exit(0)
+
+
+def refuse():
+    print("curl: (22) The requested URL returned error: 403", file=sys.stderr)
+    sys.exit(22)
+
+
+zone = "0" * 32
+if method == "GET" and path.startswith("zones?name="):
+    if cls != "dns":
+        refuse()
+    ok([{"id": zone}])
+elif method == "GET" and path.endswith("/access/apps?per_page=1000"):
+    if cls != "access":
+        refuse()
+    ok(s["apps"], {"result_info": {"total_pages": 1}})
+elif method == "POST" and path.endswith("/access/apps"):
+    if cls != "access":
+        refuse()
+    b = json.loads(body)
+    with open(os.path.join(D, "last_body.json"), "w", encoding="utf-8") as fh:
+        fh.write(body)
+    aid = "a" * 8 + "-1111-2222-3333-" + "4" * 12
+    s["apps"].append({"id": aid, "name": b["name"], "domain": b["domain"]})
+    save()
+    ok({"id": aid})
+elif method == "GET" and "/dns_records?name=" in path:
+    if cls != "dns":
+        refuse()
+    name = path.split("name=", 1)[1]
+    ok([r for r in s["records"] if r["name"] == name])
+elif method == "DELETE" and "/dns_records/" in path:
+    if cls != "dns":
+        refuse()
+    rid = path.rsplit("/", 1)[1]
+    s["records"] = [r for r in s["records"] if r["id"] != rid or r.get("sticky")]
+    save()
+    ok({"id": rid})
+elif method == "DELETE" and "/access/apps/" in path:
+    if cls != "access":
+        refuse()
+    aid = path.rsplit("/", 1)[1]
+    s["apps"] = [a for a in s["apps"] if a["id"] != aid]
+    save()
+    ok({"id": aid})
+else:
+    refuse()

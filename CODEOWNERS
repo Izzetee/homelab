@@ -4,3 +4,16 @@
 /.gitleaks.toml @Izzetee
 /renovate.json @Izzetee
 /CODEOWNERS @Izzetee
+# Everything outside one existing application's own directory is merged by the owner (the publishing door merges nothing else).
+/AGENTS.md @Izzetee
+/.agents/ @Izzetee
+/docs/ @Izzetee
+/tools/ @Izzetee
+/ansible/ @Izzetee
+/tofu/ @Izzetee
+/networking/ @Izzetee
+/apps/root.yaml @Izzetee
+/apps/_argocd/ @Izzetee
+/apps/platform/ @Izzetee
+/apps/identity/ @Izzetee
+/apps/observability/ @Izzetee

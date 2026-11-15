@@ -18,6 +18,8 @@ tofu/          OpenTofu: VM module and environments (state never lives here)
 apps/          one directory per application, ArgoCD manifests
 networking/    Cilium pools and network policies
 docs/          architecture and runbooks
+tools/         agent and owner tools: credential helper, publishing door, Access tool, changelog report
+.agents/       agent skills (Agent Skills format)
 ci/            helper scripts of the CI workflow
 .github/       CI workflow (GitHub-hosted runners only)
 ```

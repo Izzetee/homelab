@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Stand-in for curl in the changelog report's self-test: GitHub pulls and the wiki's collections/documents API from a state file. Logs
+`<host> <path> auth=<yes|no|wrong>` (never a token or a body); a refused call exits 22."""
+import json
+import os
+import re
+import sys
+
+D = os.environ["STUB_DIR"]
+cfg = sys.stdin.read()
+with open(os.path.join(D, "argv.log"), "a", encoding="utf-8") as fh:
+    fh.write(" ".join(sys.argv[1:]) + "\n")
+m = re.search(r'^url = "([^"]+)"', cfg, re.M)
+url = m.group(1)
+auth = re.search(r'Authorization: Bearer ([^"\s]+)', cfg)
+tok = auth.group(1) if auth else ""
+with open(os.path.join(D, "state.json"), encoding="utf-8") as fh:
+    s = json.load(fh)
+host = "github" if "github.example" in url else "wiki"
+cls = "no" if not tok else ("yes" if tok in (os.environ.get("STUB_GH", ""), os.environ.get("STUB_WIKI", "")) else "wrong")
+with open(os.path.join(D, "requests.log"), "a", encoding="utf-8") as fh:
+    fh.write(f"{host} {url.split('example.invalid', 1)[1].split('?')[0]} auth={cls}\n")
+if host == "github":
+    page = int(re.search(r"[?&]page=(\d+)", url).group(1))
+    print(json.dumps(s["pulls"] if page == 1 else []))
+    sys.exit(0)
+if tok != os.environ["STUB_WIKI"]:
+    print("curl: (22) 401", file=sys.stderr)
+    sys.exit(22)
+body = re.search(r'^data-raw = "((?:[^"\\]|\\.)*)"$', cfg, re.M)
+req = json.loads(re.sub(r"\\(.)", r"\1", body.group(1))) if body else {}
+if url.endswith("/api/collections.list"):
+    print(json.dumps({"data": [{"id": cid, "name": c["name"]} for cid, c in s["collections"].items()]}))
+elif url.endswith("/api/documents.list"):
+    docs = s["collections"][req["collectionId"]]["docs"]
+    print(json.dumps({"data": docs[req["offset"]:req["offset"] + req["limit"]]}))
+else:
+    sys.exit(22)
