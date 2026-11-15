@@ -139,6 +139,8 @@ spec:
       namespace: open-webui
     - server: https://kubernetes.default.svc
       namespace: juraticker
+    - server: https://kubernetes.default.svc
+      namespace: agentgateway
   clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: ""

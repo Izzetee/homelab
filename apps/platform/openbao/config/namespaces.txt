@@ -1,4 +1,5 @@
 # namespaces whose Secrets the store may serve; equal to the conditions of the ClusterSecretStore
+agentgateway
 argocd
 authentik
 cert-manager

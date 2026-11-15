@@ -1,6 +1,9 @@
 path "secret/data/platform/*" {
   capabilities = ["read"]
 }
+path "secret/data/agentgateway/*" {
+  capabilities = ["read"]
+}
 path "secret/data/argocd/*" {
   capabilities = ["read"]
 }
