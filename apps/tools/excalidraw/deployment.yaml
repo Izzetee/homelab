@@ -18,6 +18,31 @@ spec:
       labels:
         app.kubernetes.io/name: excalidraw
     spec:
+      # May run on the Raspberry Pi agents (wired ones only, never the WiFi one or the one that hosts the quorum device); falls
+      # back to a VM node when no wired Pi is available.
+      tolerations:
+        - key: homelab.io/pi
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: homelab.io/link
+                    operator: NotIn
+                    values: [wifi]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [pi4-1]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: homelab.io/node-class
+                    operator: In
+                    values: [pi]
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

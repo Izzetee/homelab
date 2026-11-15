@@ -8,6 +8,10 @@ Conventions:
 - Images are pinned `tag@digest` and available for `linux/amd64` and `linux/arm64`, or the
   pod is pinned to one architecture with a `kubernetes.io/arch` node selector.
 - Secrets are `ExternalSecret` references by key name, never values.
+- The Raspberry Pi agents carry the taint `homelab.io/pi=true:NoSchedule`. A workload that tolerates it (DaemonSets aside) must be
+  allowlisted, stateless (no PVC, `nfs` or `hostPath` volume), multi-arch, require `homelab.io/link NotIn [wifi]` and
+  `kubernetes.io/hostname NotIn [pi4-1]`, only prefer `homelab.io/node-class In [pi]`, and have an egress policy that allows no
+  private range except cluster DNS (its pods leave with the node's LAN address).
 - `kustomize build <dir> | kubeconform -strict` passes locally and in CI.
 
 Layout:
