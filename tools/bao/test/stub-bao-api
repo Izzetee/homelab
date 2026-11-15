@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""A tiny HTTP stand-in for the store's API behind the LAN route: only the paths the route lets through are answered, everything else (the system
+paths above all) is 404 like the gateway. Every request is logged as `<METHOD> <path>[?query]` (no header, no body). Prints its port first."""
+import http.server
+import json
+import os
+import re
+import sys
+
+LOG, WANT = sys.argv[1], os.environ["STUB_API_TOKEN"]
+FIELD = os.environ["STUB_FIELD"]
+SEEN = set()
+
+
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def reply(self, code, doc=None):
+        body = json.dumps(doc).encode() if doc is not None else b""
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def handle_any(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        if n:
+            self.rfile.read(n)
+        with open(LOG, "a", encoding="utf-8") as fh:
+            fh.write(f"{self.command} {self.path}\n")
+        path = self.path.split("?")[0]
+        if self.headers.get("X-Vault-Token") != WANT:
+            return self.reply(403, {"errors": ["permission denied"]})
+        if path == "/v1/auth/token/lookup-self":
+            return self.reply(200, {"data": {"policies": ["default", "agents-read", "apps-create"], "ttl": 3600, "renewable": True}})
+        if path in ("/v1/auth/token/renew-self", "/v1/auth/token/revoke-self"):
+            return self.reply(200, {"auth": {"lease_duration": 3600}})
+        if path == "/v1/secret/metadata/agents/pi" and "list=true" in self.path:
+            return self.reply(200, {"data": {"keys": ["door-scan", "ghcr"]}})
+        if path == "/v1/secret/data/agents/pi/ghcr":
+            return self.reply(200, {"data": {"data": {FIELD: "x" * 12}, "metadata": {"version": 3}}})
+        if re.fullmatch(r"/v1/secret/data/apps/[a-z0-9-]+/[a-z0-9-]+", path) and self.command in ("PUT", "POST"):
+            if path in SEEN:
+                return self.reply(403, {"errors": ["permission denied"]})
+            SEEN.add(path)
+            return self.reply(200, {"data": {"version": 1}})
+        return self.reply(404, {"errors": []})
+
+    do_GET = do_PUT = do_POST = do_DELETE = do_LIST = handle_any
+
+
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+print(srv.server_address[1], flush=True)
+srv.serve_forever()

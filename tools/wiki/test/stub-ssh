@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Stand-in for the owner's scan host: reads the one-file tar from stdin, prints `OK scan files=1 patterns=<n>` or `FAIL scan <member> keys=<label>`
+when the page holds one of the store values in STUB_STORE_VALUES (comma separated). The arguments of every call are logged."""
+import io
+import os
+import sys
+import tarfile
+
+with open(os.path.join(os.environ["STUB_DIR"], "ssh-argv.log"), "a", encoding="utf-8") as fh:
+    fh.write(" ".join(sys.argv[1:]) + "\n")
+tf = tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()))
+members = [m for m in tf.getmembers() if m.isreg()]
+if len(members) != 1 or not members[0].name.startswith("wiki/"):
+    print("FAIL scan tar member")
+    sys.exit(1)
+data = tf.extractfile(members[0]).read().decode("utf-8", "replace")
+hits = [v for v in os.environ.get("STUB_STORE_VALUES", "").split(",") if v and v in data]
+if hits:
+    print(f"FAIL scan {members[0].name} keys=openbao:secret/apps/canary/value:value")
+    sys.exit(1)
+print("OK scan files=1 patterns=3")

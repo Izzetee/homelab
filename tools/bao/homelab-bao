@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# homelab-bao login | status | names | run <entry>[,<entry>] -- <command...> | check <entry>
+#             put-generated [--dry-run] <app> <name> <key>... | put-entered [--dry-run] <app> <name> <key> | logout
+set -euo pipefail
+umask 077
+
+BAO_VERSION=2.7.2
+ADDR=https://bao.lan.chill-town.de
+BAO=bao
+HOME_DIR=${HOME:-/nonexistent}/.cache/homelab-bao
+if [[ ${HOMELAB_BAO_TEST:-0} == 1 ]]; then
+  BAO=${HOMELAB_BAO_BIN:-bao}
+  ADDR=${HOMELAB_BAO_ADDR:-$ADDR}
+  HOME_DIR=${HOMELAB_BAO_HOME:-$HOME_DIR}
+fi
+TOKEN_FILE=$HOME_DIR/token
+ENTRY_RE='^[a-z0-9][a-z0-9-]{0,62}$'
+NAME_RE='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+FIELD_RE='^[A-Z][A-Z0-9_]{1,63}$'
+FIELD_DENY='^(PATH|HOME|SHELL|IFS|ENV|BASH_ENV|PS4|PROMPT_COMMAND|LD_.*|DYLD_.*|GIT_.*|SSH_.*|BAO_.*|VAULT_.*|PYTHON.*|NODE_OPTIONS|PERL5.*|RUBY.*)$'
+TMP=""
+
+fail() { echo "FAIL $*"; exit 1; }
+cleanup() { [[ -z $TMP ]] || rm -rf "$TMP"; }
+trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
+
+need() { command -v "$1" >/dev/null 2>&1 || fail "$1 is not installed"; }
+check_cli() {
+  need jq
+  need "$BAO"
+  [[ $("$BAO" version 2>/dev/null) == "OpenBao v$BAO_VERSION "* ]] || fail "bao $BAO_VERSION is required (found: $("$BAO" version 2>/dev/null | cut -d' ' -f1-2))"
+}
+mktmpdir() { TMP=$(mktemp -d "${TMPDIR:-/tmp}/homelab-bao.XXXXXX"); }
+
+# bao_call <args...>
+bao_call() {
+  [[ -s $TOKEN_FILE ]] || return 1
+  BAO_ADDR=$ADDR BAO_TOKEN=$(cat "$TOKEN_FILE") "$BAO" "$@"
+}
+need_login() { [[ -s $TOKEN_FILE ]] || fail "login needed"; }
+# lookup: JSON of the token
+lookup() { bao_call token lookup -format=json 2>/dev/null; }
+
+do_login() {
+  check_cli
+  mkdir -p "$HOME_DIR"
+  chmod 700 "$HOME_DIR"
+  mktmpdir
+  echo "the browser opens; complete the sign-in and the consent page within 5 minutes"
+  if command -v timeout >/dev/null 2>&1; then
+    BAO_ADDR=$ADDR timeout 300 "$BAO" login -method=oidc -no-store -token-only >"$TMP/token" 2>/dev/null || fail "login did not complete"
+  else
+    BAO_ADDR=$ADDR "$BAO" login -method=oidc -no-store -token-only >"$TMP/token" 2>/dev/null || fail "login did not complete"
+  fi
+  [[ -s $TMP/token ]] || fail "login did not complete"
+  tr -d '\n' <"$TMP/token" >"$TOKEN_FILE.new"
+  chmod 600 "$TOKEN_FILE.new"
+  mv -f "$TOKEN_FILE.new" "$TOKEN_FILE"
+  local ttl
+  ttl=$(lookup | jq -r '.data.ttl // empty') || true
+  [[ -n $ttl ]] || fail "login needed"
+  echo "OK login ttl=${ttl}s"
+}
+
+do_status() {
+  check_cli
+  need_login
+  local j ttl
+  j=$(lookup) || fail "login needed"
+  ttl=$(jq -r '.data.ttl' <<<"$j")
+  if [[ $ttl =~ ^[0-9]+$ && $ttl -lt 900 && $(jq -r '.data.renewable' <<<"$j") == true ]]; then
+    bao_call token renew -format=json >/dev/null 2>&1 || true
+    j=$(lookup) || fail "login needed"
+    ttl=$(jq -r '.data.ttl' <<<"$j")
+  fi
+  [[ $ttl =~ ^[0-9]+$ && $ttl -gt 0 ]] || fail "login needed"
+  echo "OK status policies=$(jq -r '.data.policies | sort | join(",")' <<<"$j") ttl=${ttl}s renewable=$(jq -r '.data.renewable' <<<"$j")"
+}
+
+do_names() {
+  check_cli
+  need_login
+  local out
+  out=$(bao_call list -format=json secret/metadata/agents/pi 2>/dev/null) || fail "login needed"
+  jq -r '.[] | select(test("^[a-z0-9-]+$"))' <<<"$out" | sort
+}
+
+# load_entry <entry>: sets ENTRY_JSON to the data of one entry (memory only; no subshell, so a FAIL reaches the terminal)
+ENTRY_JSON=""
+load_entry() {
+  [[ $1 =~ $ENTRY_RE ]] || fail "entry $(printf '%s' "$1" | tr -c 'A-Za-z0-9_-' '?' | cut -c1-40)"
+  need_login
+  ENTRY_JSON=$(bao_call read -format=json "secret/data/agents/pi/$1" 2>/dev/null) || fail "entry $1 unreadable or login needed"
+}
+fields_ok() { # fields_ok <entry> <json>: every field name allowed, else FAIL field <name>
+  local n
+  while IFS= read -r n; do
+    if [[ ! $n =~ $FIELD_RE || $n =~ $FIELD_DENY ]]; then fail "field $(printf '%s' "$n" | tr -c 'A-Za-z0-9_-' '?' | cut -c1-40)"; fi
+  done < <(jq -r '.data.data | keys[]' <<<"$2")
+}
+
+do_run() {
+  check_cli
+  local list=${1:-} e k v json
+  [[ -n $list && ${2:-} == -- && $# -ge 3 ]] || fail "usage: run <entry>[,<entry>] -- <command...>"
+  shift 2
+  IFS=, read -ra ents <<<"$list"
+  local jsons=()
+  for e in "${ents[@]}"; do
+    load_entry "$e"
+    fields_ok "$e" "$ENTRY_JSON"
+    jsons+=("$ENTRY_JSON")
+  done
+  # all entries are valid: export, then run
+  for json in "${jsons[@]}"; do
+    while IFS= read -r -d '' k && IFS= read -r -d '' v; do
+      export "$k=$v"
+    done < <(jq -j '.data.data | to_entries[] | .key, "\u0000", (.value | tostring), "\u0000"' <<<"$json")
+  done
+  json="" v=""
+  unset BAO_TOKEN BAO_ADDR
+  exec "$@"
+}
+
+do_check() {
+  check_cli
+  load_entry "${1:-}"
+  fields_ok "${1:-}" "$ENTRY_JSON"
+  echo "OK check ${1} fields=$(jq -r '.data.data | keys | join(",")' <<<"$ENTRY_JSON") version=$(jq -r '.data.metadata.version' <<<"$ENTRY_JSON")"
+}
+
+# put_common <dry> <app> <name>: validates the path; prints the PLAN line for a dry run
+put_path_ok() {
+  [[ ${1:-} =~ $NAME_RE && $1 != agents ]] || fail "app ${1:-}"
+  [[ ${2:-} =~ $NAME_RE ]] || fail "name ${2:-}"
+}
+do_put() { # do_put generated|entered ...
+  local mode=$1 dry=0 app name keys=() k
+  shift
+  if [[ ${1:-} == --dry-run ]]; then dry=1; shift; fi
+  put_path_ok "${1:-}" "${2:-}"
+  app=$1 name=$2
+  shift 2
+  [[ $# -ge 1 ]] || fail "usage: put-$mode [--dry-run] <app> <name> <key>..."
+  [[ $mode == generated || $# == 1 ]] || fail "usage: put-entered [--dry-run] <app> <name> <key>"
+  for k in "$@"; do [[ $k =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$ ]] || fail "key $(printf '%s' "$k" | tr -c 'A-Za-z0-9_.-' '?' | cut -c1-40)"; keys+=("$k"); done
+  if [[ $dry == 1 ]]; then
+    echo "PLAN create secret/apps/$app/$name keys=${#keys[@]}"
+    return 0
+  fi
+  check_cli
+  need_login
+  mktmpdir
+  if [[ $mode == generated ]]; then
+    python3 -c 'import json, secrets, sys; print(json.dumps({"data": {k: secrets.token_hex(32) for k in sys.argv[1:]}}))' "${keys[@]}" >"$TMP/payload.json"
+  else
+    local v=""
+    if [[ ${HOMELAB_BAO_TEST:-0} == 1 && -n ${HOMELAB_BAO_TTY:-} ]]; then
+      IFS= read -r v <"$HOMELAB_BAO_TTY" || true
+    else
+      { exec 3</dev/tty; } 2>/dev/null || fail "terminal needed"
+      printf 'value for %s: ' "${keys[0]}" >/dev/tty
+      IFS= read -r -s v <&3 || true
+      printf '\n' >/dev/tty
+    fi
+    [[ -n $v ]] || fail "empty value"
+    printf '%s' "$v" | jq -Rs --arg k "${keys[0]}" '{data: {($k): .}}' >"$TMP/payload.json"
+    v=""
+  fi
+  chmod 600 "$TMP/payload.json"
+  if bao_call write "secret/data/apps/$app/$name" "@$TMP/payload.json" >/dev/null 2>&1; then
+    echo "OK put secret/apps/$app/$name keys=${#keys[@]}"
+  else
+    fail "exists or denied"
+  fi
+}
+
+do_logout() {
+  check_cli
+  bao_call token revoke -self >/dev/null 2>&1 || true
+  rm -f "$TOKEN_FILE"
+  echo "OK logout"
+}
+
+main() {
+  local mode=${1:-}
+  [[ -n $mode ]] || fail "usage: homelab-bao login|status|names|run|check|put-generated|put-entered|logout"
+  shift
+  case $mode in
+    login) do_login ;;
+    status) do_status ;;
+    names) do_names ;;
+    run) do_run "$@" ;;
+    check) do_check "$@" ;;
+    put-generated) do_put generated "$@" ;;
+    put-entered) do_put entered "$@" ;;
+    logout) do_logout ;;
+    *) fail "usage: homelab-bao login|status|names|run|check|put-generated|put-entered|logout" ;;
+  esac
+}
+main "$@"

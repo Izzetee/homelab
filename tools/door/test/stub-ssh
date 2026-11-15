@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Stand-in for the owner's scan host in the door's self-test: reads the one-file tar from stdin, decodes the commit messages of a framed patch and
+prints `OK scan files=1 patterns=<n>` or the host's FAIL lines: a store value anywhere (STUB_STORE_VALUES) is `FAIL scan <member> keys=<label>`, the
+private word STUB_PRIVATE in a message or an added line is `FAIL text <sha7|file> name`. Logs its arguments. STUB_SSH_DOWN: unreachable (exit 255);
+STUB_SSH_NOSTORE: `FAIL scan patterns openbao`."""
+import base64
+import io
+import os
+import re
+import sys
+import tarfile
+
+D = os.environ["STUB_DIR"]
+with open(os.path.join(D, "ssh-argv.log"), "a", encoding="utf-8") as fh:
+    fh.write(" ".join(sys.argv[1:]) + "\n")
+if os.environ.get("STUB_SSH_DOWN"):
+    sys.exit(255)
+data = sys.stdin.buffer.read()
+if os.environ.get("STUB_SSH_NOSTORE"):
+    print("FAIL scan patterns openbao")
+    sys.exit(1)
+tf = tarfile.open(fileobj=io.BytesIO(data))
+members = [m for m in tf.getmembers() if m.isreg()]
+if len(members) != 1:
+    print("FAIL scan tar member")
+    sys.exit(1)
+name = members[0].name
+text = tf.extractfile(members[0]).read().decode("utf-8", "replace")
+store = [v for v in os.environ.get("STUB_STORE_VALUES", "").split(",") if v]
+priv = os.environ.get("STUB_PRIVATE", "")
+fails = []
+msgs = {}
+for line in text.split("\n"):
+    m = re.fullmatch(r"msg ([0-9a-f]{40}) ([A-Za-z0-9+/=]*)", line)
+    if m:
+        msgs[m.group(1)] = base64.b64decode(m.group(2)).decode("utf-8", "replace")
+scanned = text + "\n".join(msgs.values())
+if any(v in scanned for v in store):
+    fails.append(f"FAIL scan {name} keys=openbao:secret/apps/canary/value:value")
+if priv:
+    for sha, msg in msgs.items():
+        if priv in msg:
+            fails.append(f"FAIL text {sha[:7]} name")
+    if name.endswith("text.txt") and priv in text:
+        fails.append("FAIL text text.txt name")
+    cur = None
+    for line in text.split("\n"):
+        if line.startswith("+++ b/"):
+            cur = line[6:]
+        elif line.startswith("+") and not line.startswith("+++") and cur and priv in line:
+            fails.append(f"FAIL text {cur} name")
+if fails:
+    print("\n".join(dict.fromkeys(fails)))
+    sys.exit(1)
+print("OK scan files=1 patterns=3")

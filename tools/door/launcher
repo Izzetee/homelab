@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# homelab-door <mode> ...  (modes: see door.sh); runs the door code of the commit the fixed endpoint reports as main.
+set -euo pipefail
+AT=@ # an at sign is written through a variable: this tree holds no e-mail-shaped literal
+umask 077
+URL=https://github.com/Izzetee/homelab.git
+SSH_URL=git${AT}github.com:Izzetee/homelab.git
+SSH_URL2=ssh://git${AT}github.com/Izzetee/homelab.git
+
+die() { echo "FAIL $*"; exit 1; }
+TMP=""
+trap '[[ -z $TMP ]] || rm -rf "$TMP"' EXIT
+trap 'exit 130' INT TERM HUP
+
+LAUNCHER=$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")
+mode=${1:-}
+[[ -n $mode ]] || die "door usage: homelab-door <mode> (see tools/door/door.sh)"
+HL=$(git rev-parse --show-toplevel 2>/dev/null) || die "door clone: run it inside the homelab clone"
+
+sha=$(git ls-remote "$URL" refs/heads/main 2>/dev/null | awk '{print $1}' | head -1) || true
+[[ ${sha:-} =~ ^[0-9a-f]{40}$ ]] || die "door source"
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/homelab-door.XXXXXX")
+git init -q --bare "$TMP/src.git"
+git -C "$TMP/src.git" fetch -q --no-tags "$URL" "$sha" 2>/dev/null || die "door source"
+[[ $(git -C "$TMP/src.git" rev-parse "$sha^{commit}" 2>/dev/null) == "$sha" ]] || die "door source"
+mkdir "$TMP/code"
+git -C "$TMP/src.git" archive "$sha" tools/door .gitleaks.toml 2>/dev/null | tar -x -C "$TMP/code" --no-same-owner 2>/dev/null || die "door source"
+[[ -f $TMP/code/tools/door/door.sh && -f $TMP/code/tools/door/check.py && -f $TMP/code/.gitleaks.toml ]] || die "door source"
+
+# the clone must push to the fixed endpoint (the raw configuration counts: a rewrite rule only changes the transport)
+for key in remote.origin.url remote.origin.pushurl; do
+  v=$(git -C "$HL" config --local --get "$key" 2>/dev/null || true)
+  [[ -z $v || $v == "$URL" || $v == "${URL%.git}" || $v == "$SSH_URL" || $v == "$SSH_URL2" ]] || die "door origin"
+done
+[[ -n $(git -C "$HL" config --local --get remote.origin.url 2>/dev/null || true) ]] || die "door origin"
+
+if [[ $mode != install ]]; then
+  cmp -s "$0" "$TMP/code/tools/door/launcher" || die "launcher stale"
+  [[ -z $(git -C "$HL" config --get core.hooksPath 2>/dev/null || true) ]] || die "door hooksPath"
+  hook=$(git -C "$HL" rev-parse --absolute-git-dir)/hooks/pre-push
+  if [[ $mode != uninstall && $mode != doctor ]]; then
+    [[ -x $hook && $(cat "$hook" 2>/dev/null || true) == "$(printf '#!/bin/sh\nexec "%s" --hook "$@"' "$LAUNCHER")" ]] || die "hook"
+  fi
+fi
+export DOOR_SHA=$sha DOOR_URL=$URL DOOR_CODE=$TMP/code DOOR_SRC=$TMP/src.git DOOR_CLONE=$HL DOOR_LAUNCHER=$LAUNCHER
+bash "$TMP/code/tools/door/door.sh" "$@"
