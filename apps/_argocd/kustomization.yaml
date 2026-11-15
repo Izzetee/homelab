@@ -28,6 +28,7 @@ resources:
   - blackbox-exporter.yaml
   - snmp-exporter.yaml
   - observability-config.yaml
+  - garage.yaml
   - n8n.yaml
   - open-webui.yaml
   - affine.yaml

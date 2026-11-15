@@ -1,0 +1,82 @@
+# promtool unit tests of homelab-object-storage.yaml: one firing and one
+# quiet case per rule. The rule file list is replaced by the rendered rule
+# files when the tests run. Series use neutral labels.
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  - name: object store down
+    interval: 1m
+    input_series:
+      - series: 'up{job="garage",instance="store"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabObjectStoreDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: garage, instance: store}
+            exp_annotations:
+              summary: "The object store is down (no scrape of its admin port)"
+  - name: object store absent
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabObjectStoreDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: garage}
+            exp_annotations:
+              summary: "The object store is down (no scrape of its admin port)"
+  - name: object store up
+    interval: 1m
+    input_series:
+      - series: 'up{job="garage",instance="store"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabObjectStoreDown
+        exp_alerts: []
+  - name: object store unhealthy
+    interval: 1m
+    input_series:
+      - series: 'cluster_healthy{job="garage",instance="store"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabObjectStoreUnhealthy
+        exp_alerts:
+          - exp_labels: {severity: warning, job: garage, instance: store}
+            exp_annotations:
+              summary: "The object store reports an unhealthy cluster state"
+  - name: object store healthy
+    interval: 1m
+    input_series:
+      - series: 'cluster_healthy{job="garage",instance="store"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabObjectStoreUnhealthy
+        exp_alerts: []
+  - name: object store block errors
+    interval: 1m
+    input_series:
+      - series: 'block_resync_errored_blocks{job="garage",instance="store"}'
+        values: '2+0x100'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HomelabObjectStoreBlockErrors
+        exp_alerts:
+          - exp_labels: {severity: warning, job: garage, instance: store}
+            exp_annotations:
+              summary: "The object store has blocks whose last resync failed"
+  - name: object store no block errors
+    interval: 1m
+    input_series:
+      - series: 'block_resync_errored_blocks{job="garage",instance="store"}'
+        values: '0+0x100'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HomelabObjectStoreBlockErrors
+        exp_alerts: []

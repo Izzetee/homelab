@@ -15,6 +15,22 @@ spec:
       static:
         - https://grafana.lan.chill-town.de/api/health
 ---
+# The object store's health endpoint on its LAN name.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: s3-lan
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://s3.lan.chill-town.de/health
+---
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
 metadata:

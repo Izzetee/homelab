@@ -1,0 +1,21 @@
+# Scrapes the admin port of the object store (health and metrics paths need no token).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: garage
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - garage
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: garage
+  endpoints:
+    - port: admin
+      path: /metrics
+      interval: 30s
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: garage

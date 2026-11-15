@@ -1,0 +1,32 @@
+# Alerts of the object store (job `garage`, admin port). Disk use falls under HomelabNodeDiskAbove80, the nightly copy under
+# HomelabBackupTooOld and KubeJobFailed, the LAN endpoint under HomelabProbeFailed. Unit tests: tests/homelab-object-storage.yaml (promtool).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-object-storage
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab-object-storage
+      rules:
+        - alert: HomelabObjectStoreDown
+          expr: up{job="garage"} == 0 or absent(up{job="garage"})
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "The object store is down (no scrape of its admin port)"
+        - alert: HomelabObjectStoreUnhealthy
+          expr: cluster_healthy{job="garage"} == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The object store reports an unhealthy cluster state"
+        - alert: HomelabObjectStoreBlockErrors
+          expr: block_resync_errored_blocks{job="garage"} > 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "The object store has blocks whose last resync failed"

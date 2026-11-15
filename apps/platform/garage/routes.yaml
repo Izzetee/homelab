@@ -1,0 +1,33 @@
+# The object store is served on the LAN name only, through the HTTPS listener (path-style requests). The exact path /health goes to
+# the health endpoint of the admin port, everything else to the object API. Nothing attaches to the tunnel listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: garage-lan
+  namespace: garage
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - s3.lan.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      matches:
+        - path:
+            type: Exact
+            value: /health
+      backendRefs:
+        - name: garage
+          port: 3903
+    - timeouts:
+        request: 0s
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: garage
+          port: 3900
