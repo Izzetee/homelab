@@ -90,3 +90,22 @@ spec:
         - ports:
             - port: "4317"
               protocol: TCP
+    - toEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    - toServices:
+        - k8sService:
+            namespace: gateway
+            serviceName: cilium-gateway-homelab
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: authentik
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: server
+      toPorts:
+        - ports:
+            - port: "9000"
+              protocol: TCP

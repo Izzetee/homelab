@@ -9,6 +9,7 @@ resources:
 configMapGenerator:
   - name: authentik-blueprints
     files:
+      - blueprints/agentgateway.yaml
       - blueprints/argocd.yaml
       - blueprints/grafana.yaml
       - blueprints/outline.yaml

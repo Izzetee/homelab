@@ -122,3 +122,8 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: outline
+    - name: AUTHENTIK_OIDC_AGENTGATEWAY_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: agentgateway
