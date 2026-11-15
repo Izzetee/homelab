@@ -85,6 +85,14 @@ spec:
         - ports:
             - port: "5432"
               protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: agentgateway
+            app.kubernetes.io/name: agentgateway
+      toPorts:
+        - ports:
+            - port: "4000"
+              protocol: TCP
     - toFQDNs:
         - matchName: auth.chill-town.de
       toPorts:

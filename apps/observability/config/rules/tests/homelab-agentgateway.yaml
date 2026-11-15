@@ -1,0 +1,90 @@
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  - name: agentgateway pod missing
+    interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="agentgateway",deployment="agentgateway"}'
+        values: '0+0x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AgentgatewayDown
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "No ready agentgateway pod"}
+  - name: agentgateway metrics absent
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AgentgatewayDown
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "No ready agentgateway pod"}
+  - name: agentgateway pod ready
+    interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="agentgateway",deployment="agentgateway"}'
+        values: '1+0x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AgentgatewayDown
+        exp_alerts: []
+  - name: upstream errors above 20 percent
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{status="200",client="client-a"}'
+        values: '0+1x40'
+      - series: 'agentgateway_requests_total{status="502",client="client-a"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AgentgatewayUpstreamErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "More than 20 % of the agentgateway requests end in a 5xx answer"}
+  - name: upstream errors below 20 percent
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{status="200",client="client-a"}'
+        values: '0+10x40'
+      - series: 'agentgateway_requests_total{status="502",client="client-a"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: AgentgatewayUpstreamErrors
+        exp_alerts: []
+  - name: upstream errors with fewer than five requests
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{status="502",client="client-a"}'
+        values: '0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 2 3 4 4 4 4 4 4 4 4'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: AgentgatewayUpstreamErrors
+        exp_alerts: []
+  - name: client rate limited
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{status="429",client="client-a"}'
+        values: '0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1'
+      - series: 'agentgateway_requests_total{status="200",client="client-b"}'
+        values: '0+1x19'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayRateLimited
+        exp_alerts:
+          - exp_labels: {severity: warning, client: client-a}
+            exp_annotations: {summary: "Client client-a was rate limited by agentgateway in the last 30 minutes"}
+  - name: no rate limiting
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{status="429",client="client-a"}'
+        values: '0+0x19'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayRateLimited
+        exp_alerts: []

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  namespace: agentgateway
+  labels:
+    app.kubernetes.io/name: agentgateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: agentgateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    - name: metrics
+      port: 15020
+      targetPort: metrics

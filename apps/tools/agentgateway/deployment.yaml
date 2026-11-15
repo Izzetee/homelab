@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  namespace: agentgateway
+  labels:
+    app.kubernetes.io/name: agentgateway
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agentgateway
+    spec:
+      serviceAccountName: agentgateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agentgateway
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
+          args:
+            - -f
+            - /config/config.yaml
+          envFrom:
+            - secretRef:
+                name: virtual-key-hashes
+          env:
+            - name: AZURE_OPENAI_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: azure-provider
+                  key: AZURE_OPENAI_MODEL
+            - name: AZURE_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: azure-provider
+                  key: AZURE_BASE_URL
+          ports:
+            - name: http
+              containerPort: 4000
+            - name: metrics
+              containerPort: 15020
+            - name: ready
+              containerPort: 15021
+          startupProbe:
+            httpGet:
+              path: /healthz/ready
+              port: ready
+            periodSeconds: 1
+            timeoutSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: ready
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: azure-key
+              mountPath: /var/run/agentgateway/azure
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: agentgateway-config
+        - name: azure-key
+          secret:
+            secretName: azure-provider
+            items:
+              - key: OPENAI_GPT52_KEY
+                path: OPENAI_GPT52_KEY
+                mode: 288
+        - name: tmp
+          emptyDir:
+            medium: Memory
