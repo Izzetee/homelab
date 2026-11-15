@@ -215,3 +215,50 @@ spec:
     staticConfig:
       static:
         - https://wiki.lan.chill-town.de/_health
+---
+# The model gateway's built-in UI on its LAN name.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: agentgateway-ui-lan
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://agw.lan.chill-town.de/ui/
+---
+# The gateway's admin endpoints must stay absent on both LAN names; a route that forwards one turns the 404 into another status.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: agentgateway-admin-agw
+  namespace: monitoring
+spec:
+  module: http_404
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://agw.lan.chill-town.de/config_dump
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: agentgateway-admin-llm
+  namespace: monitoring
+spec:
+  module: http_404
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://llm.lan.chill-town.de/config_dump

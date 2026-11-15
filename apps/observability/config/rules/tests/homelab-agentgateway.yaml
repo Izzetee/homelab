@@ -88,3 +88,58 @@ tests:
       - eval_time: 15m
         alertname: AgentgatewayRateLimited
         exp_alerts: []
+  - name: configuration not loaded
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_config_synchronized{job="agentgateway"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayConfigNotSynchronized
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "The agentgateway configuration on disk failed to load"}
+  - name: configuration loaded
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_config_synchronized{job="agentgateway"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayConfigNotSynchronized
+        exp_alerts: []
+  - name: configuration failed only briefly
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_config_synchronized{job="agentgateway"}'
+        values: '1 1 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayConfigNotSynchronized
+        exp_alerts: []
+  - name: user route on the ui listener
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{listener="ui",route="default/user-route",status="200"}'
+        values: '0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+      - series: 'agentgateway_requests_total{listener="ui",route="internal/ui",status="200"}'
+        values: '0+1x19'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AgentgatewayAdminForward
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "A request reached agentgateway through a route other than the built-in UI on the UI listener"}
+  - name: only the built-in ui route and unmatched requests
+    interval: 1m
+    input_series:
+      - series: 'agentgateway_requests_total{listener="ui",route="internal/ui",status="200"}'
+        values: '0+1x19'
+      - series: 'agentgateway_requests_total{listener="ui",route="unknown",status="404"}'
+        values: '0+1x19'
+      - series: 'agentgateway_requests_total{listener="default",route="unknown",status="401"}'
+        values: '0+1x19'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AgentgatewayAdminForward
+        exp_alerts: []

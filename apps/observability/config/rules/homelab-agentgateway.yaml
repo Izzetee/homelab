@@ -27,3 +27,16 @@ spec:
             severity: warning
           annotations:
             summary: "Client {{ $labels.client }} was rate limited by agentgateway in the last 30 minutes"
+        - alert: AgentgatewayConfigNotSynchronized
+          expr: max(agentgateway_config_synchronized) < 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The agentgateway configuration on disk failed to load"
+        - alert: AgentgatewayAdminForward
+          expr: sum(increase(agentgateway_requests_total{listener="ui", route!~"internal/ui|unknown"}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "A request reached agentgateway through a route other than the built-in UI on the UI listener"
