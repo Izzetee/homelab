@@ -35,7 +35,7 @@ spec:
           annotations:
             summary: "The agentgateway configuration on disk failed to load"
         - alert: AgentgatewayAdminForward
-          expr: sum(increase(agentgateway_requests_total{listener="ui", route!~"internal/ui|unknown"}[10m])) > 0
+          expr: sum(increase(agentgateway_requests_total{listener="ui", route!~"internal/ui|internal/ui-login|unknown"}[10m])) > 0
           labels:
             severity: warning
           annotations:
