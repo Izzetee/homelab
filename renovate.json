@@ -9,7 +9,12 @@
   "schedule": ["* 0-5 * * 6"],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
+  "rebaseWhen": "conflicted",
+  "updateNotScheduled": false,
   "automerge": false,
+  "major": {
+    "dependencyDashboardApproval": true
+  },
   "platformCommit": "enabled",
   "kubernetes": {
     "managerFilePatterns": ["/^apps/.+\\.ya?ml$/", "/^networking/.+\\.ya?ml$/"]
@@ -44,6 +49,15 @@
       "depNameTemplate": "opentofu/opentofu",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Helm values that pin an image as repository, tag and digest on consecutive lines",
+      "managerFilePatterns": ["/^apps/.+/values\\.ya?ml$/"],
+      "matchStrings": [
+        "repository: (?<depName>[a-z0-9][a-z0-9./_-]*)\\n\\s+tag: (?<currentValue>[A-Za-z0-9_][A-Za-z0-9._-]*)\\n\\s+digest: (?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
@@ -68,6 +82,33 @@
       "description": "required_version is OpenTofu, not HashiCorp Terraform",
       "matchManagers": ["terraform"],
       "matchDepNames": ["hashicorp/terraform"],
+      "enabled": false
+    },
+    {
+      "description": "n8n 3.x is an early-access release line; lift in its own change when n8n marks 3.x stable",
+      "matchPackageNames": ["docker.io/n8nio/n8n"],
+      "allowedVersions": "/^2\\./"
+    },
+    {
+      "description": "Runner labels stay: the pinned actionlint does not know ubuntu-26.04; lift with an actionlint that does",
+      "matchDatasources": ["github-runners"],
+      "enabled": false
+    },
+    {
+      "description": "Authentik chart and image move together, one major release at a time (no skipping, no downgrade); raise with each upgrade step",
+      "matchDepNames": ["authentik", "ghcr.io/goauthentik/server"],
+      "groupName": "authentik",
+      "allowedVersions": "/^2026\\.[2-5]\\./"
+    },
+    {
+      "description": "Read by the regex manager for repository/tag/digest pins (helm-values would write the digest into the tag)",
+      "matchManagers": ["helm-values"],
+      "matchDepNames": ["ghcr.io/goauthentik/server"],
+      "enabled": false
+    },
+    {
+      "description": "Dummy image of a CI self-test, not a dependency",
+      "matchPackageNames": ["example.test/**"],
       "enabled": false
     },
     {
