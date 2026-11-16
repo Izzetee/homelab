@@ -67,3 +67,22 @@ spec:
         - ports:
             - port: "8123"
               protocol: TCP
+---
+# Prometheus also reads the host exporters outside the cluster (TCP 9100, the addresses of the scrape config `hosts`). Cilium adds the allows of
+# every policy that selects a pod, so the policy above stays as it is.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-hosts
+  namespace: monitoring
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  egress:
+    - toCIDR:
+        - 192.168.1.98/32
+      toPorts:
+        - ports:
+            - port: "9100"
+              protocol: TCP

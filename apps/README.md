@@ -61,10 +61,10 @@ as destinations):
 
 | Application | Wave | Content |
 |---|---|---|
-| `observability-base` | 2 | the two namespaces, the `grafana-sidecar` Role, the ingress policy of `monitoring`, the egress policies of the SNMP exporter and Prometheus, the `ExternalSecret`s of the NAS SNMPv3 login and the Home Assistant token |
+| `observability-base` | 2 | the two namespaces, the `grafana-sidecar` Role, the ingress policy of `monitoring`, the egress policies of the SNMP exporter and Prometheus (the second Prometheus policy allows the host exporters), the `ExternalSecret`s of the NAS SNMPv3 login and the Home Assistant token |
 | `kube-prometheus-stack` | 3 | Prometheus Operator and CRDs, Prometheus (30 days, local volume), Alertmanager (Discord), kube-state-metrics, node-exporter, Grafana |
 | `loki`, `tempo`, `alloy`, `blackbox-exporter`, `snmp-exporter` | 4 | Loki (14 days), Tempo (7 days), Alloy (pod logs and events through the API, OTLP), blackbox exporter, SNMP exporter (NAS over SNMPv3) |
-| `observability-config` | 5 | ServiceMonitors, probes, the scrape configs of the NAS and Home Assistant, alert rules, the overview, NAS and Home Assistant dashboards, the Grafana route |
+| `observability-config` | 5 | ServiceMonitors, probes, the scrape configs of the NAS, Home Assistant and the hosts outside the cluster, alert rules, the overview, NAS, Home Assistant, hosts and host detail dashboards, the Grafana route |
 
 - Values files live next to the Application name (`observability/<application>/values.yaml`); every image is `tag@digest`.
 - Grafana is stateless: datasources and dashboards come from this repository (ConfigMaps with the label `grafana_dashboard`),
