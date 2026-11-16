@@ -101,3 +101,24 @@ spec:
         - action: replace
           targetLabel: job
           replacement: agentgateway
+---
+# The LAN resolver: the metrics port of its ClusterIP Service, every pod.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: blocky
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - blocky
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: blocky

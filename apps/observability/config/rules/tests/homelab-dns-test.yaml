@@ -1,0 +1,235 @@
+# promtool unit tests of homelab-dns.yaml: per rule one firing case, one silent case, and for the error share one silent case at zero
+# traffic. The rule file list is replaced by the rendered rule files when the tests run. Series use neutral labels.
+rule_files:
+  - rules.yml
+evaluation_interval: 1m
+tests:
+  - name: dns down, no replica scraped
+    interval: 1m
+    input_series:
+      - series: 'up{job="blocky",instance="a"}'
+        values: '0+0x30'
+      - series: 'up{job="blocky",instance="b"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDnsDown
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: "LAN DNS is down (no Blocky replica scraped, or the LAN probe fails)"
+  - name: dns down, job absent
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated",instance="x"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDnsDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: blocky}
+            exp_annotations:
+              summary: "LAN DNS is down (no Blocky replica scraped, or the LAN probe fails)"
+  - name: dns down, LAN probe fails
+    interval: 1m
+    input_series:
+      - series: 'up{job="blocky",instance="a"}'
+        values: '1+0x30'
+      - series: 'probe_success{job="probe/monitoring/blocky-lan",instance="lan"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDnsDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: "probe/monitoring/blocky-lan", instance: lan}
+            exp_annotations:
+              summary: "LAN DNS is down (no Blocky replica scraped, or the LAN probe fails)"
+  - name: dns healthy
+    interval: 1m
+    input_series:
+      - series: 'up{job="blocky",instance="a"}'
+        values: '1+0x30'
+      - series: 'probe_success{job="probe/monitoring/blocky-lan",instance="lan"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabDnsDown
+        exp_alerts: []
+  - name: one replica not ready
+    interval: 1m
+    input_series:
+      - series: 'kube_daemonset_status_number_ready{namespace="blocky",daemonset="blocky"}'
+        values: '2+0x30'
+      - series: 'kube_daemonset_status_desired_number_scheduled{namespace="blocky",daemonset="blocky"}'
+        values: '3+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabDnsReplicaDown
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: blocky, daemonset: blocky}
+            exp_annotations:
+              summary: "A Blocky replica is not ready or not scraped"
+  - name: one replica not scraped
+    interval: 1m
+    input_series:
+      - series: 'up{job="blocky",instance="a"}'
+        values: '0+0x30'
+      - series: 'up{job="blocky",instance="b"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabDnsReplicaDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: blocky, instance: a}
+            exp_annotations:
+              summary: "A Blocky replica is not ready or not scraped"
+  - name: all replicas ready, also during a surge
+    interval: 1m
+    input_series:
+      - series: 'kube_daemonset_status_number_ready{namespace="blocky",daemonset="blocky"}'
+        values: '4+0x30'
+      - series: 'kube_daemonset_status_desired_number_scheduled{namespace="blocky",daemonset="blocky"}'
+        values: '3+0x30'
+      - series: 'up{job="blocky",instance="a"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabDnsReplicaDown
+        exp_alerts: []
+  - name: error share above 5 percent with traffic
+    interval: 1m
+    input_series:
+      - series: 'blocky_query_total{job="blocky",instance="a",client="c",type="A"}'
+        values: '0+60x40'
+      - series: 'blocky_error_total{job="blocky",instance="a"}'
+        values: '0+12x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsUpstreamErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "More than 5 % of the DNS answers are errors"
+  - name: servfail answers count as errors
+    interval: 1m
+    input_series:
+      - series: 'blocky_query_total{job="blocky",instance="a",client="c",type="A"}'
+        values: '0+60x40'
+      - series: 'blocky_response_total{job="blocky",instance="a",reason="RESOLVED (tcp-tls:1.1.1.1)",response_code="SERVFAIL",response_type="RESOLVED"}'
+        values: '0+12x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsUpstreamErrors
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: "More than 5 % of the DNS answers are errors"
+  - name: error share low with traffic
+    interval: 1m
+    input_series:
+      - series: 'blocky_query_total{job="blocky",instance="a",client="c",type="A"}'
+        values: '0+60x40'
+      - series: 'blocky_error_total{job="blocky",instance="a"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsUpstreamErrors
+        exp_alerts: []
+  - name: error share silent at zero traffic
+    interval: 1m
+    input_series:
+      - series: 'blocky_query_total{job="blocky",instance="a",client="c",type="A"}'
+        values: '5+0x40'
+      - series: 'blocky_error_total{job="blocky",instance="a"}'
+        values: '3+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsUpstreamErrors
+        exp_alerts: []
+  - name: error share silent at a trickle of queries
+    interval: 1m
+    input_series:
+      - series: 'blocky_query_total{job="blocky",instance="a",client="c",type="A"}'
+        values: '0+1x40'
+      - series: 'blocky_error_total{job="blocky",instance="a"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsUpstreamErrors
+        exp_alerts: []
+  - name: lists stale
+    interval: 1m
+    input_series:
+      - series: 'blocky_last_list_group_refresh_timestamp_seconds{job="blocky",instance="a"}'
+        values: '0+0x1000'
+    alert_rule_test:
+      - eval_time: 800m
+        alertname: HomelabDnsListsStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: blocky, instance: a}
+            exp_annotations:
+              summary: "A Blocky replica has stale or empty deny lists, or list downloads fail"
+  - name: ads list empty
+    interval: 1m
+    input_series:
+      - series: 'blocky_denylist_cache_entries{job="blocky",instance="a",group="ads"}'
+        values: '0+0x60'
+      - series: 'blocky_last_list_group_refresh_timestamp_seconds{job="blocky",instance="a"}'
+        values: '3600+60x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HomelabDnsListsStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: blocky, instance: a, group: ads}
+            exp_annotations:
+              summary: "A Blocky replica has stale or empty deny lists, or list downloads fail"
+  - name: list downloads failing
+    interval: 1m
+    input_series:
+      - series: 'blocky_failed_downloads_total{job="blocky",instance="a"}'
+        values: '0+1x90'
+      - series: 'blocky_denylist_cache_entries{job="blocky",instance="a",group="ads"}'
+        values: '70000+0x90'
+      - series: 'blocky_last_list_group_refresh_timestamp_seconds{job="blocky",instance="a"}'
+        values: '3600+60x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: HomelabDnsListsStale
+        exp_alerts:
+          - exp_labels: {severity: warning, job: blocky, instance: a}
+            exp_annotations:
+              summary: "A Blocky replica has stale or empty deny lists, or list downloads fail"
+  - name: lists fresh
+    interval: 1m
+    input_series:
+      - series: 'blocky_denylist_cache_entries{job="blocky",instance="a",group="ads"}'
+        values: '70000+0x90'
+      - series: 'blocky_last_list_group_refresh_timestamp_seconds{job="blocky",instance="a"}'
+        values: '3600+60x90'
+      - series: 'blocky_failed_downloads_total{job="blocky",instance="a"}'
+        values: '0+0x90'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: HomelabDnsListsStale
+        exp_alerts: []
+  - name: blocking disabled
+    interval: 1m
+    input_series:
+      - series: 'blocky_blocking_enabled{job="blocky",instance="a"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsBlockingDisabled
+        exp_alerts:
+          - exp_labels: {severity: warning, job: blocky, instance: a}
+            exp_annotations:
+              summary: "Blocking is switched off on a Blocky replica"
+  - name: blocking enabled
+    interval: 1m
+    input_series:
+      - series: 'blocky_blocking_enabled{job="blocky",instance="a"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabDnsBlockingDisabled
+        exp_alerts: []

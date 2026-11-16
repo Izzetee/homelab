@@ -1,5 +1,6 @@
 # Blackbox exporter for the Probe objects of apps/observability/config (chart prometheus-community/prometheus-blackbox-exporter,
-# pinned in the Application). Four modules: no redirect is followed and the answer must be the exact expected one.
+# pinned in the Application). The HTTP modules follow no redirect and accept only the exact expected answer; the DNS modules check
+# the resolvers (Pi-hole, the LAN resolver and its two public upstreams).
 image:
   tag: "v0.29.1"
   digest: "sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13"
@@ -75,6 +76,60 @@ config:
         valid_rcodes: [NOERROR]
         validate_answer_rrs:
           fail_if_none_matches_regexp: [".+"]
+    # the LAN resolver: a normal name answers; the canary name is blocked (0.0.0.0)
+    dns_blocky:
+      prober: dns
+      timeout: 5s
+      dns:
+        transport_protocol: udp
+        preferred_ip_protocol: ip4
+        query_name: example.com
+        query_type: A
+        valid_rcodes: [NOERROR]
+        validate_answer_rrs:
+          fail_if_none_matches_regexp: [".+"]
+    dns_blocky_blocked:
+      prober: dns
+      timeout: 5s
+      dns:
+        transport_protocol: udp
+        preferred_ip_protocol: ip4
+        query_name: blocky-canary.chill-town.de
+        query_type: A
+        valid_rcodes: [NOERROR]
+        validate_answer_rrs:
+          fail_if_not_matches_regexp: ['0\.0\.0\.0$']
+    # the public upstreams over DNS-over-TLS (certificate name verified)
+    dns_dot_cloudflare:
+      prober: dns
+      timeout: 5s
+      dns:
+        transport_protocol: tcp
+        dns_over_tls: true
+        preferred_ip_protocol: ip4
+        query_name: example.com
+        query_type: A
+        valid_rcodes: [NOERROR]
+        validate_answer_rrs:
+          fail_if_none_matches_regexp: [".+"]
+        tls_config:
+          server_name: cloudflare-dns.com
+          insecure_skip_verify: false
+    dns_dot_quad9:
+      prober: dns
+      timeout: 5s
+      dns:
+        transport_protocol: tcp
+        dns_over_tls: true
+        preferred_ip_protocol: ip4
+        query_name: example.com
+        query_type: A
+        valid_rcodes: [NOERROR]
+        validate_answer_rrs:
+          fail_if_none_matches_regexp: [".+"]
+        tls_config:
+          server_name: dns.quad9.net
+          insecure_skip_verify: false
 serviceMonitor:
   selfMonitor:
     enabled: true

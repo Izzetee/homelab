@@ -1,0 +1,52 @@
+# Alerts of the LAN resolver (job `blocky`, the probe `blocky-lan` and the kube-state-metrics series of its DaemonSet). A failing DNS probe
+# also falls under HomelabProbeFailed. Unit tests: tests/homelab-dns-test.yaml (promtool).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-dns
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab-dns
+      rules:
+        - alert: HomelabDnsDown
+          expr: sum(up{job="blocky"}) == 0 or absent(up{job="blocky"}) or probe_success{job="probe/monitoring/blocky-lan"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "LAN DNS is down (no Blocky replica scraped, or the LAN probe fails)"
+        - alert: HomelabDnsReplicaDown
+          expr: kube_daemonset_status_number_ready{namespace="blocky",daemonset="blocky"} < kube_daemonset_status_desired_number_scheduled{namespace="blocky",daemonset="blocky"} or up{job="blocky"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "A Blocky replica is not ready or not scraped"
+        - alert: HomelabDnsUpstreamErrors
+          expr: |
+            ((sum(rate(blocky_error_total{job="blocky"}[10m])) or vector(0)) + (sum(rate(blocky_response_total{job="blocky",response_code="SERVFAIL"}[10m])) or vector(0)))
+              / sum(rate(blocky_query_total{job="blocky"}[10m])) > 0.05
+            and sum(rate(blocky_query_total{job="blocky"}[10m])) >= 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "More than 5 % of the DNS answers are errors"
+        - alert: HomelabDnsListsStale
+          expr: |
+            time() - blocky_last_list_group_refresh_timestamp_seconds{job="blocky"} > 12 * 3600
+            or blocky_denylist_cache_entries{job="blocky",group="ads"} == 0
+            or increase(blocky_failed_downloads_total{job="blocky"}[1h]) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "A Blocky replica has stale or empty deny lists, or list downloads fail"
+        - alert: HomelabDnsBlockingDisabled
+          expr: blocky_blocking_enabled{job="blocky"} == 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Blocking is switched off on a Blocky replica"
