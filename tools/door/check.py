@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks of the publishing door (door.sh).
 
-  check.py commits REPO RANGE_REV... [--all-mode] | tree REPO BASE TIP [--all] | text FILE... | ref NAME | merge-paths REPO BASE N | gitleaks REPORT.json
+  check.py commits REPO RANGE_REV... [--all-mode] [--renovate PR_COMMITS.json] | tree REPO BASE TIP [--all] | text FILE... | ref NAME | merge-paths REPO BASE N | gitleaks REPORT.json
 """
 import fnmatch
 import json
@@ -65,7 +65,16 @@ def guarded(path):
 
 
 # ---- commits ---------------------------------------------------------------------------------------------------------------------
-def check_commits(repo, revs, all_mode):
+def verified_shas(path):
+    """SHAs that GitHub reports as verified (`valid`) in the commit list of a PR (REST pulls/<n>/commits)."""
+    with open(path, encoding="utf-8") as fh:
+        rows = json.load(fh)
+    return {r["sha"] for r in rows if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{40}", str(r.get("sha", "")))
+            and ((r.get("commit") or {}).get("verification") or {}).get("verified") is True
+            and ((r.get("commit") or {}).get("verification") or {}).get("reason") == "valid"}
+
+
+def check_commits(repo, revs, all_mode, verified=None):
     out = git(repo, "log", "--format=%H%x00%ae%x00%ce%x00%B%x1e", *revs).decode("utf-8", "replace")
     n = 0
     for c in out.split("\x1e"):
@@ -74,7 +83,10 @@ def check_commits(repo, revs, all_mode):
         sha, ae, ce, msg = c.lstrip("\n").split("\x00", 3)
         n += 1
         a, cm = ae.strip().lower(), ce.strip().lower()
-        if not (cm in COMMITTERS and (a in AUTHORS or (all_mode and a == RENOVATE))):
+        # Renovate mode (a PR opened by renovate[bot], decided by the caller): the bot address as author only with the web-flow committer
+        # and a commit GitHub reports as verified; every other commit keeps the strict rule
+        bot_ok = verified is not None and a == RENOVATE and cm == WEBFLOW and sha in verified
+        if not (cm in COMMITTERS and (a in AUTHORS or (all_mode and a == RENOVATE) or bot_ok)):
             fail(f"identity {sha[:7]}")
         if ADDRESS.search(msg):
             fail(f"text {sha[:7]} address")
@@ -597,7 +609,13 @@ def main(argv):
     try:
         if cmd == "commits" and len(rest) >= 2:
             all_mode = "--all-mode" in rest
-            check_commits(rest[0], [r for r in rest[1:] if r != "--all-mode"], all_mode)
+            args = rest[1:]
+            verified = None
+            if "--renovate" in args:
+                i = args.index("--renovate")
+                verified = verified_shas(args[i + 1])
+                del args[i : i + 2]
+            check_commits(rest[0], [r for r in args if r != "--all-mode"], all_mode, verified)
         elif cmd == "tree" and len(rest) >= 3:
             whole = "--all" in rest[3:]
             check_tree_apps(rest[0], rest[1], rest[2], whole)
@@ -627,7 +645,7 @@ def main(argv):
         else:
             print("FAIL check usage")
             return 2
-    except (RuntimeError, OSError):
+    except (RuntimeError, OSError, ValueError, IndexError):
         print("FAIL check could not run")
         return 1
     return 1 if fails else 0

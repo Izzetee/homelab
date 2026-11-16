@@ -10,6 +10,7 @@ Technical lessons that shaped the tools and checks.
 - **NFS servers may only serve version 4.0**; check the effective setting, not the supported one, and mount with the version named.
 - **Extensions inside a database can lag the image**: run the extension update after an image update and have restore drills accept only a strict upgrade path.
 - **`timeout` in uutils coreutils kills only its direct child**; never hand pipes to a timed child, use a kill escalation.
+- **Strict branch protection plus Renovate's default rebases every open pull request on every push to `main`**, and each force-push is a mail and a CI run. Set `rebaseWhen: conflicted` and rebase on request (label `rebase`); a hold or an approval rule does not close an existing pull request by itself.
 - **Renovate starts in silent mode**; verify an install through its dependency dashboard, not through the absence of pull requests. Stock managers misread some pins: use regex managers and test them locally.
 - **An API rebase merge sets the merging user as committer**; an identity rule must allow it.
 - **Tokens in URLs leak** into process lists and credential helpers; use a credential helper or SSH keys. Values travel through stdin, pipes or 0600 files, never arguments.

@@ -32,6 +32,8 @@ with open(os.path.join(D, "gh-state.json"), encoding="utf-8") as fh:
 m = re.fullmatch(r"repos/Izzetee/homelab/pulls/(\d+)", path)
 if method == "GET" and m:
     print(json.dumps(s["pulls"][m.group(1)]))
+elif method == "GET" and (mc := re.fullmatch(r"repos/Izzetee/homelab/pulls/(\d+)/commits\?per_page=100", path)):
+    print(json.dumps(s.get("commits", {}).get(mc.group(1), [])))
 elif method == "GET" and re.fullmatch(r"repos/Izzetee/homelab/commits/[0-9a-f]{40}/check-runs", path):
     print(json.dumps({"check_runs": s["checks"].get(path.split("/")[4], [])}))
 elif method == "POST" and path == "repos/Izzetee/homelab/pulls":

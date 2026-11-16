@@ -137,7 +137,7 @@ scan_host() {
 }
 
 # ---- checks -------------------------------------------------------------------------------------------------------------------------------
-REVS=() TIP="" N=0
+REVS=() TIP="" N=0 RENOVATE_COMMITS="" # RENOVATE_COMMITS: the commit list of a PR opened by renovate[bot] (merge only)
 check_gitleaks() {
   rm -f "$TMP/gl.json"
   gitleaks git --log-opts="${REVS[*]}" --config "$DOOR_CODE/.gitleaks.toml" --redact --no-banner --log-level error --exit-code 0 \
@@ -163,7 +163,7 @@ run_checks() {
   shift 2 || shift $#
   fetch_base
   rc=0
-  out=$(python3 "$CHK" commits "$HL" "${REVS[@]}" ${mode:+"$mode"}) || rc=$?
+  out=$(python3 "$CHK" commits "$HL" "${REVS[@]}" ${mode:+"$mode"} ${RENOVATE_COMMITS:+--renovate "$RENOVATE_COMMITS"}) || rc=$?
   grep '^FAIL ' <<<"$out" || true
   N=$(sed -n 's/^STAT commits=//p' <<<"$out")
   [[ $N =~ ^[0-9]+$ ]] || { echo "FAIL door check could not run"; return 1; }
@@ -284,6 +284,7 @@ gh_api_allowed() { # gh_api_allowed <method> <path>
   local m=$1 p=$2 base="repos/$REPO"
   [[ $m == GET && $p =~ ^$base/pulls/[0-9]+$ ]] && return 0
   [[ $m == GET && $p =~ ^$base/commits/[0-9a-f]{40}/check-runs$ ]] && return 0
+  [[ $m == GET && $p =~ ^$base/pulls/[0-9]+/commits\?per_page=100$ ]] && return 0
   [[ $m == POST && $p == "$base/pulls" ]] && return 0
   [[ $m == PATCH && $p =~ ^$base/pulls/[0-9]+$ ]] && return 0
   [[ $m == PUT && $p =~ ^$base/pulls/[0-9]+/merge$ ]] && return 0
@@ -341,6 +342,12 @@ merge_main() { # merge_main <n>
   python3 "$CHK" merge-paths "$HL" "$DOOR_SHA" "$n" <"$TMP/paths.txt" || exit 1
   TIP=$sha
   REVS=("$DOOR_SHA..$sha")
+  # a PR opened by renovate[bot] from a renovate/ branch of this repository (same-repository is required above): its commits may carry the bot
+  # address as author when GitHub reports them verified (check.py, Renovate mode); every other PR keeps the strict identity rule
+  if [[ $(jq -r '.user.login // ""' <<<"$pr") == 'renovate[bot]' && $(jq -r '.user.type // ""' <<<"$pr") == Bot && $(jq -r '.head.ref // ""' <<<"$pr") == renovate/* ]]; then
+    gh_call GET "$p/commits?per_page=100" >"$TMP/pr-commits.json" 2>/dev/null || { echo "FAIL merge $n commits"; exit 1; }
+    RENOVATE_COMMITS=$TMP/pr-commits.json
+  fi
   run_checks 0 "" "refs/heads/pull-$n" || exit 1
   ok=$(gh_call GET "repos/$REPO/commits/$sha/check-runs" 2>/dev/null | jq -r '[.check_runs[] | select(.name == "ci-ok" and .app.slug == "github-actions" and .status == "completed" and .conclusion == "success")] | length') || ok=0
   [[ ${ok:-0} -ge 1 ]] || { echo "FAIL merge $n ci-ok"; exit 1; }

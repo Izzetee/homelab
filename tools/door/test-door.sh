@@ -728,6 +728,105 @@ door merge 12
 reset_stubs
 door merge abc
 [[ $rc != 0 && $out == *'FAIL door merge needs a PR number'* ]] && ok "merge needs a number" || bad "merge arg: $out"
+
+# ---- Renovate's own pull requests (spec "The homelab door merges Renovate's own pull requests")
+BOT="29139614+renovate[bot]${AT}users.noreply.github.com"
+WEBFLOW="noreply${AT}github.com"
+renovate_commit() { # renovate_commit <message> <committer email>: a commit authored by the bot address
+  cl add -A
+  GIT_AUTHOR_EMAIL=$BOT GIT_COMMITTER_EMAIL=$2 cl commit -q -m "$1"
+}
+add_renovate_pr() { # add_renovate_pr <n> <branch> <login> <type> <head ref> <verified true|false> <reason> [list|nolist]
+  add_pr "$1" "$2"
+  python3 - "$t/state/gh-state.json" "$1" "$(cl rev-list --reverse "refs/remotes/origin/main..refs/heads/$2" | tr '\n' ' ')" "$3" "$4" "$5" "$6" "$7" "${8:-list}" <<'PYX'
+import json, sys
+p, n, shas, login, typ, ref, verified, reason, lst = sys.argv[1:]
+s = json.load(open(p))
+s["pulls"][n]["user"] = {"login": login, "type": typ}
+s["pulls"][n]["head"]["ref"] = ref
+s.setdefault("commits", {})[n] = [] if lst == "nolist" else [{"sha": c, "commit": {"verification": {"verified": verified == "true", "reason": reason}}} for c in shas.split()]
+json.dump(s, open(p, "w"))
+PYX
+}
+renovate_case() { # renovate_case <label> <expected FAIL text> <pr>: refused, no merge request
+  [[ $rc != 0 && $out == *"$2"* && ! -e $t/state/gh-merged.json && $(grep -c '^PUT' "$t/state/gh-requests.log" || true) == 0 ]] && ok "$1: $2, no merge request" || bad "$1: rc=$rc $out"
+}
+mkbranch r-ok
+put apps/tools/demo/configmap.yaml 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo
+  namespace: demo
+data:
+  mode: three'
+renovate_commit "Update demo" "$WEBFLOW"
+reset_stubs
+add_renovate_pr 20 r-ok 'renovate[bot]' Bot renovate/demo-3.x true valid
+door merge 20
+[[ $rc == 0 && $out == *'OK merge 20'* && $(jq -r '.merge_method' "$t/state/gh-merged.json") == rebase && $(jq -r '.sha' "$t/state/gh-merged.json") == "$(cl rev-parse r-ok)" ]] && grep -q '^GET repos/Izzetee/homelab/pulls/20/commits?per_page=100$' "$t/state/gh-requests.log" && ok "a signed Renovate PR inside one app: merged by API rebase on the checked head (one commit-list read)" || bad "renovate merge: rc=$rc $out"
+reset_stubs
+add_renovate_pr 21 r-ok Izzetee User renovate/demo-3.x true valid
+door merge 21
+renovate_case "the bot address on a PR not opened by renovate[bot]" "FAIL identity $(cl rev-parse --short=7 r-ok)"
+reset_stubs
+add_renovate_pr 22 r-ok 'renovate[bot]' User renovate/demo-3.x true valid
+door merge 22
+renovate_case "login renovate[bot] but a user account" "FAIL identity"
+reset_stubs
+add_renovate_pr 23 r-ok 'renovate[bot]' Bot someone/branch true valid
+door merge 23
+renovate_case "renovate[bot] PR from a branch outside renovate/" "FAIL identity"
+reset_stubs
+add_renovate_pr 24 r-ok 'renovate[bot]' Bot renovate/demo-3.x false unsigned
+door merge 24
+renovate_case "a bot-authored commit GitHub reports unverified" "FAIL identity"
+reset_stubs
+add_renovate_pr 25 r-ok 'renovate[bot]' Bot renovate/demo-3.x false invalid
+door merge 25
+renovate_case "a bot-authored commit with another verification reason" "FAIL identity"
+reset_stubs
+add_renovate_pr 26 r-ok 'renovate[bot]' Bot renovate/demo-3.x true valid nolist
+door merge 26
+renovate_case "a bot-authored commit missing from GitHub's commit list" "FAIL identity"
+mkbranch r-pushed
+put apps/tools/demo/configmap.yaml 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo
+  namespace: demo
+data:
+  mode: four'
+renovate_commit "Update demo again" "$(printf 'someone%s' "${AT}example.com")"
+reset_stubs
+add_renovate_pr 27 r-pushed 'renovate[bot]' Bot renovate/demo-4.x true valid
+door merge 27
+renovate_case "the bot author with another committer than web-flow" "FAIL identity"
+reset_stubs
+door r-ok
+[[ $rc != 0 && $out == *'FAIL identity'* && ! -e $t/endpoint.git/refs/heads/r-ok ]] && ok "a push of the bot-authored commit: FAIL identity (the strict rule), nothing pushed" || bad "bot push: rc=$rc $out"
+mkbranch r-mixed
+put apps/tools/demo/configmap.yaml 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo
+  namespace: demo
+data:
+  mode: five'
+renovate_commit "Update demo a third time" "$WEBFLOW"
+put apps/tools/demo/other.yaml 'a: 1'
+commit "A personal commit on top"
+reset_stubs
+add_renovate_pr 28 r-mixed 'renovate[bot]' Bot renovate/demo-5.x true valid
+door merge 28
+[[ $rc == 0 && $out == *'OK merge 28'* ]] && ok "a Renovate PR with one more personal commit: the personal commit keeps the strict rule and passes" || bad "renovate mixed: rc=$rc $out"
+mkbranch r-docs
+put docs/a.md 'x'
+renovate_commit "Update docs" "$WEBFLOW"
+reset_stubs
+add_renovate_pr 29 r-docs 'renovate[bot]' Bot renovate/docs-1.x true valid
+door merge 29
+renovate_case "a renovate[bot] PR outside apps/tools/" "FAIL merge 29 owner"
+[[ $(grep -c 'pulls/29/commits' "$t/state/gh-requests.log" || true) == 0 ]] && ok "the allowlist is checked before the commit list is read" || bad "commit list read before the allowlist"
 grep -qE '^(GET|POST|PATCH|PUT) repos/Izzetee/homelab/(pulls|commits)' "$t/state/gh-requests.log" || true
 ! grep -qE 'contents|git/' "$t/state/gh-requests.log" && ok "no content or git/ API path was ever called" || bad "forbidden API path"
 
