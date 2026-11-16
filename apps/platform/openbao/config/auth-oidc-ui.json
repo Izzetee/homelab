@@ -1,0 +1,5 @@
+{
+  "oidc_discovery_url": "https://auth.lan.chill-town.de/application/o/openbao-ui/",
+  "oidc_client_id": "openbao-ui",
+  "default_role": "ui-admin"
+}
