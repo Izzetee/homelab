@@ -4,7 +4,7 @@ locals {
 
   # One row per cluster node. The same rows (without `enabled`) are kept in the operator's node
   # file, and the apply wrapper refuses a plan that differs from it. All three nodes are enabled;
-  # an agent's memory is the host headroom left after the other guests (at most 16 GiB, at least 6 GiB).
+  # an agent's memory is the host headroom left after the other guests (at least 6 GiB).
   # Sizes follow the measured peaks (no VM below twice its peak). A disk only grows; memory and cores of a running
   # VM change after its next power cycle (see ../../README.md, Capacity).
   nodes = {
@@ -31,7 +31,7 @@ locals {
       vm_id       = 222
       node_name   = "proxmox"
       cores       = 4
-      memory_mib  = 16384
+      memory_mib  = 24576
       disk_gb     = 48
       mac_address = "BC:24:11:05:53:26"
     }
