@@ -90,6 +90,18 @@
       "allowedVersions": "/^2\\./"
     },
     {
+      "description": "n8n publishes each new minor as a beta and promotes it to stable with a later patch release: one branch per minor, and a minor waits for its approval on the dashboard; approve it once its newest release is n8n's stable tag (patches of the running minor need no approval)",
+      "matchPackageNames": ["docker.io/n8nio/n8n"],
+      "separateMultipleMinor": true,
+      "branchTopic": "{{{depNameSanitized}}}-{{{newMajor}}}.{{{newMinor}}}.x"
+    },
+    {
+      "description": "n8n minors wait for the dashboard approval named in the rule above",
+      "matchPackageNames": ["docker.io/n8nio/n8n"],
+      "matchUpdateTypes": ["minor"],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "Runner labels stay: the pinned actionlint does not know ubuntu-26.04; lift with an actionlint that does",
       "matchDatasources": ["github-runners"],
       "enabled": false
