@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# changelog-report.sh --since <YYYY-MM-DD> [--scan]
+# changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]
 # Lists merged pull requests without a changelog entry (MISSING homelab#<n>) and entries that break the value-free rules (FAIL entry <doc id> <rule>).
 set -euo pipefail
 umask 077
@@ -68,16 +68,22 @@ scan_host() { # scan_host <member name> <file>
 }
 
 main() {
-  local since="" scan=0 prs entries pages ch_id ops_id n title count_prs=0 count_entries=0 missing=0 line id text
+  local since="" from_pr="" have_since=0 have_from=0 scan=0 prs entries pages ch_id ops_id n title count_prs=0 count_entries=0 missing=0 line id text
   while [[ $# -gt 0 ]]; do
     case $1 in
-      --since) since=${2:-}; shift ;;
+      --since) [[ -n ${2:-} && $have_since == 0 ]] || fail "usage: changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]"; since=$2; have_since=1; shift ;;
+      --from-pr) [[ -n ${2:-} && $have_from == 0 ]] || fail "usage: changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]"; from_pr=$2; have_from=1; shift ;;
       --scan) scan=1 ;;
-      *) fail "usage: changelog-report.sh --since <YYYY-MM-DD> [--scan]" ;;
+      *) fail "usage: changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]" ;;
     esac
     shift || true
   done
-  [[ $since =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || fail "usage: changelog-report.sh --since <YYYY-MM-DD> [--scan]"
+  # exactly one window: a date, or a PR number (a day can hold PRs from before the changelog existed)
+  if [[ $have_from == 1 ]]; then
+    [[ $have_since == 0 && $from_pr =~ ^[0-9]{1,7}$ ]] || fail "usage: changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]"
+  else
+    [[ $have_since == 1 && $since =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || fail "usage: changelog-report.sh (--since <YYYY-MM-DD> | --from-pr <n>) [--scan]"
+  fi
   need curl
   need jq
   [[ -n ${WIKI_TOKEN-} ]] || fail "WIKI_TOKEN is not in the environment (run through homelab-bao run wiki-pi)"
@@ -90,7 +96,14 @@ main() {
     prs=$(jq -c --argjson p "$(jq -c '[.[] | select(.merged_at != null) | {number, title, merged_at}]' <<<"$n")" '. + $p' <<<"$prs")
     [[ $(jq 'length' <<<"$n") -ge 100 ]] || break
   done
-  prs=$(jq -c --arg s "$since" '[.[] | select(.merged_at[0:10] >= $s)] | unique_by(.number) | sort_by(.number)' <<<"$prs")
+  if [[ -n $from_pr ]]; then
+    prs=$(jq -c --argjson f "$from_pr" '[.[] | select(.number >= $f)] | unique_by(.number) | sort_by(.number)' <<<"$prs")
+    # the page scan below starts on the day of the first PR of the window
+    since=$(jq -r '.[0].merged_at[0:10] // empty' <<<"$prs")
+    [[ -n $since ]] || fail "no merged pull request from #$from_pr"
+  else
+    prs=$(jq -c --arg s "$since" '[.[] | select(.merged_at[0:10] >= $s)] | unique_by(.number) | sort_by(.number)' <<<"$prs")
+  fi
   count_prs=$(jq 'length' <<<"$prs")
 
   ch_id=$(collection_id Changelog)

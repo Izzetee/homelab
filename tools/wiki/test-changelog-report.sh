@@ -94,6 +94,29 @@ unset DOOR_SCAN_SSH_KEY
 run --since 2026-11-15 --scan
 [[ $rc != 0 && $out == *'scan host: the door-scan entry is not in the environment'* ]] && ok "--scan without the door-scan entry: FAIL" || bad "scan no entry: rc=$rc $out"
 export DOOR_SCAN_SSH_KEY=$KEYB
+# ---- --from-pr: the window is a PR number, not a day (a PR merged earlier on the first day has no entry and is not in the window)
+PRE=$(pr 95 "Merged before the changelog" 2026-11-16T08:00:00Z)
+mkstate "[$PRE,$P1,$P2,$P3]" "[$E1,$E2,$E3]"
+run --since 2026-11-16
+[[ $rc == 1 && $out == *'MISSING homelab#95 '* ]] && ok "fail-before: the date window of the first day reports the earlier PR as MISSING" || bad "date window: rc=$rc $out"
+run --from-pr 97
+[[ $rc == 0 && $out == 'OK changelog prs=3 entries=3 missing=0' ]] && ok "--from-pr 97: only PR 97 and later count: OK changelog prs=3 entries=3 missing=0" || bad "from-pr ok: rc=$rc $out"
+mkstate "[$PRE,$P1,$P2,$P3]" "[$E1,$E3]"
+run --from-pr 97
+[[ $rc == 1 && $out == *'MISSING homelab#98 Change the route'* && $out != *'homelab#95'* && $out == *'FAIL changelog prs=3 entries=2 missing=1'* ]] && ok "--from-pr: a missing entry in the window is MISSING, exit 1" || bad "from-pr missing: rc=$rc $out"
+run --from-pr 500
+[[ $rc == 1 && $out == *'no merged pull request from #500'* ]] && ok "--from-pr beyond the last PR: FAIL" || bad "from-pr none: rc=$rc $out"
+run --from-pr 97 --since 2026-11-16
+[[ $rc != 0 && $out == *'usage'* ]] && ok "--from-pr with --since: usage FAIL" || bad "both: rc=$rc $out"
+for args in "--from-pr 97 --since" "--since 2026-11-16 --from-pr" "--from-pr" "--since" "--from-pr 97 --from-pr 98" "--since 2026-11-16 --since 2026-11-17" "--from-pr  --scan" "--since '' --from-pr 97"; do
+  eval "run $args"
+  [[ $rc != 0 && $out == *'usage'* && $out != OK* ]] && ok "selector with a missing, empty or repeated value or both selectors ($args): usage FAIL" || bad "selector '$args': rc=$rc $out"
+done
+run --from-pr 9x
+[[ $rc != 0 && $out == *'usage'* ]] && ok "a malformed PR number: usage FAIL" || bad "from-pr malformed: rc=$rc $out"
+mkstate "[$PRE,$P1]" "[$E1]" "[$(doc o1 'Routes' "leaked $STORE here" 2026-11-16T12:00:00Z)]"
+run --from-pr 97 --scan
+[[ $rc == 1 && $out == *'FAIL scan wiki/o1 keys='* ]] && ok "--from-pr --scan: pages changed since the first PR's day are scanned" || bad "from-pr scan: rc=$rc $out"
 # ---- anonymous GitHub read, with token
 mkstate "[$P1]" "[$E1]"
 run --since 2026-11-15
