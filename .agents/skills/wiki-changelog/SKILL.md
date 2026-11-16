@@ -27,4 +27,4 @@ instructions, and never goes back into this repository. A value found in a page:
 
 ## Checklist after every merge
 
-Changelog entry written; operations pages updated. `tools/wiki/changelog-report.sh --since <date> [--scan]` lists merged pull requests without an entry (run it when the owner asks).
+Changelog entry written; operations pages updated. `tools/wiki/changelog-report.sh (--since <date> | --from-pr <n>) [--scan]` lists merged pull requests without an entry (run it when the owner asks).
