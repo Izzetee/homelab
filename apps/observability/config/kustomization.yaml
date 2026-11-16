@@ -10,8 +10,11 @@ resources:
   - rules/homelab-nas-ha.yaml
   - rules/homelab-object-storage.yaml
   - rules/homelab-agentgateway.yaml
+  - rules/homelab-dns.yaml
   - dashboards/homelab-overview.yaml
   - dashboards/nas.yaml
   - dashboards/home-assistant.yaml
   - dashboards/object-storage.yaml
   - dashboards/agentgateway.yaml
+  - dashboards/dns.yaml
+  - dashboards/dns-queries.yaml

@@ -278,3 +278,66 @@ spec:
     staticConfig:
       static:
         - https://llm.lan.chill-town.de/config_dump
+---
+# The LAN resolver on its load balancer address: a normal name must answer.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: blocky-lan
+  namespace: monitoring
+spec:
+  module: dns_blocky
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - 192.168.1.4:53
+---
+# Blocking works without a download: the inline canary name must answer 0.0.0.0.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: blocky-blocked
+  namespace: monitoring
+spec:
+  module: dns_blocky_blocked
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - 192.168.1.4:53
+---
+# The two public upstreams of the resolver, each over DNS-over-TLS with its certificate name checked.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: dns-upstream-cloudflare
+  namespace: monitoring
+spec:
+  module: dns_dot_cloudflare
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - 1.1.1.1:853
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: dns-upstream-quad9
+  namespace: monitoring
+spec:
+  module: dns_dot_quad9
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - 9.9.9.9:853
