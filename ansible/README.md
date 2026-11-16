@@ -23,6 +23,8 @@ The agents are in their own inventory group, so the first `k3s-cluster` run is l
 `homelab.io/node-class=pi` and the taint `homelab.io/pi=true:NoSchedule` (`pi4-4` also carries `homelab.io/link=wifi`),
 and run with their own `--limit <host>`; the arm64 K3s binary has its own pinned checksum.
 
+Reboot a new node once after it joined and check from a host outside the cluster that every load balancer address answers; some settings take effect only at the first reboot.
+
 `files/k3s-addons/` and `k3s-images.lock` hold the K3s bundled add-ons (CoreDNS, local-path provisioner, metrics-server)
 and the pause image, every image pinned by digest; they are generated for the pinned K3s version and refreshed
 together with every K3s version change. K3s applies the add-on files from its auto-deploy directory, which the

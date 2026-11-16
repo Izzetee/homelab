@@ -332,3 +332,104 @@ tests:
       - eval_time: 10m
         alertname: HomelabProbeFailed
         exp_alerts: []
+  # LAN addresses checked from outside the cluster
+  - name: lan address check failing
+    interval: 1m
+    input_series:
+      - series: 'homelab_lan_vip_up{ip="192.168.1.3",check="https",name="grafana.lan.chill-town.de"}'
+        values: '0+0x20'
+      - series: 'homelab_lan_vip_up{ip="192.168.1.4",check="dns",name="blocky-canary.chill-town.de"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HomelabLanVipDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HomelabLanVipDown
+        exp_alerts:
+          - exp_labels: {severity: critical, ip: 192.168.1.3, check: https, name: grafana.lan.chill-town.de}
+            exp_annotations: {summary: "LAN address 192.168.1.3 fails its https check for grafana.lan.chill-town.de from outside the cluster"}
+  - name: lan address checks passing
+    interval: 1m
+    input_series:
+      - series: 'homelab_lan_vip_up{ip="192.168.1.3",check="https",name="grafana.lan.chill-town.de"}'
+        values: '1+0x20'
+      - series: 'homelab_lan_vip_up{ip="192.168.1.4",check="dns",name="blocky-canary.chill-town.de"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabLanVipDown
+        exp_alerts: []
+  - name: lan check has never reported
+    interval: 1m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HomelabLanVipProbeMissing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: "The check of the LAN load balancer addresses from outside the cluster has not run for more than 5 minutes"}
+  - name: lan check timestamp stops growing
+    interval: 1m
+    input_series:
+      - series: 'homelab_lan_vip_last_run_timestamp_seconds{instance="i",job="node-exporter"}'
+        values: '0+60x5 300+0x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HomelabLanVipProbeMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: i, job: node-exporter}
+            exp_annotations: {summary: "The check of the LAN load balancer addresses from outside the cluster has not run for more than 5 minutes"}
+  - name: lan check runs
+    interval: 1m
+    input_series:
+      - series: 'homelab_lan_vip_last_run_timestamp_seconds{instance="i",job="node-exporter"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabLanVipProbeMissing
+        exp_alerts: []
+  - name: load balancer address without a check
+    interval: 1m
+    input_series:
+      - series: 'kube_service_status_load_balancer_ingress{namespace="gateway",service="cilium-gateway-homelab",ip="192.168.1.3"}'
+        values: '1+0x60'
+      - series: 'kube_service_status_load_balancer_ingress{namespace="blocky",service="blocky-dns",ip="192.168.1.4"}'
+        values: '1+0x60'
+      - series: 'homelab_lan_vip_up{ip="192.168.1.3",check="https",name="grafana.lan.chill-town.de"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabLanVipUnprobed
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HomelabLanVipUnprobed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: blocky, service: blocky-dns, ip: 192.168.1.4}
+            exp_annotations: {summary: "Load balancer address 192.168.1.4 of blocky/blocky-dns has no check from outside the cluster"}
+  - name: every load balancer address has a check
+    interval: 1m
+    input_series:
+      - series: 'kube_service_status_load_balancer_ingress{namespace="gateway",service="cilium-gateway-homelab",ip="192.168.1.3"}'
+        values: '1+0x60'
+      - series: 'kube_service_status_load_balancer_ingress{namespace="blocky",service="blocky-dns",ip="192.168.1.4"}'
+        values: '1+0x60'
+      - series: 'homelab_lan_vip_up{ip="192.168.1.3",check="https",name="grafana.lan.chill-town.de"}'
+        values: '1+0x60'
+      - series: 'homelab_lan_vip_up{ip="192.168.1.4",check="dns",name="blocky-canary.chill-town.de"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: HomelabLanVipUnprobed
+        exp_alerts: []
+  - name: no check series at all leaves the missing check to its own alert
+    interval: 1m
+    input_series:
+      - series: 'kube_service_status_load_balancer_ingress{namespace="gateway",service="cilium-gateway-homelab",ip="192.168.1.3"}'
+        values: '1+0x60'
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: HomelabLanVipUnprobed
+        exp_alerts: []

@@ -92,3 +92,33 @@ spec:
             severity: warning
           annotations:
             summary: "Probe of {{ $labels.instance }} fails"
+        # Checks from a host outside the cluster (a timer there writes homelab_lan_vip_up for the host exporter's textfile
+        # collector). In-cluster probes cannot see a lost layer-2 announcement: traffic to a load balancer address is
+        # balanced in eBPF without ARP. The first two rules are about the check itself, the third keeps "every address has a
+        # check" true. Limit: Unprobed counts every assigned load balancer address, because all of them are announced on the
+        # LAN today; an address that is not meant for the LAN needs a selector here.
+        - alert: HomelabLanVipDown
+          expr: homelab_lan_vip_up == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "LAN address {{ $labels.ip }} fails its {{ $labels.check }} check for {{ $labels.name }} from outside the cluster"
+        - alert: HomelabLanVipProbeMissing
+          expr: |
+            absent(homelab_lan_vip_last_run_timestamp_seconds)
+              or (time() - homelab_lan_vip_last_run_timestamp_seconds > 300)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The check of the LAN load balancer addresses from outside the cluster has not run for more than 5 minutes"
+        - alert: HomelabLanVipUnprobed
+          expr: |
+            (kube_service_status_load_balancer_ingress unless on (ip) homelab_lan_vip_up)
+              and on () (count(homelab_lan_vip_up) > 0)
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Load balancer address {{ $labels.ip }} of {{ $labels.namespace }}/{{ $labels.service }} has no check from outside the cluster"

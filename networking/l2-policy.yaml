@@ -1,4 +1,4 @@
-# The amd64 VM nodes answer ARP for the load balancer addresses on their LAN interface (named ens18 or eth0, depending on how the VM's network device is presented).
+# The amd64 VM nodes answer ARP for the load balancer addresses on their LAN interface (named ens18 until the VM's first reboot and eth0 afterwards: the cloud-init network config renames it at boot).
 # Load balancer addresses only, never external IPs.
 apiVersion: cilium.io/v2alpha1
 kind: CiliumL2AnnouncementPolicy
