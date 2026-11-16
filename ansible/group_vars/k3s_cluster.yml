@@ -42,5 +42,13 @@ server_config_yaml: |
   write-kubeconfig-mode: "0600"
   kube-apiserver-arg:
     - admission-control-config-file=/etc/rancher/k3s/psa.yaml
+  kubelet-arg:
+    - image-gc-high-threshold=75
+    - image-gc-low-threshold=65
+# image garbage collection starts at 75 % disk use (below the 80 % disk alert; the kubelet default is 85 %) and collects down to 65 %.
+# The Raspberry Pi agents override agent_config_yaml (group_vars/pi.yml, host_vars) and keep the kubelet defaults.
 agent_config_yaml: |
   pause-image: "{{ k3s_pause_image }}"
+  kubelet-arg:
+    - image-gc-high-threshold=75
+    - image-gc-low-threshold=65
