@@ -1,0 +1,122 @@
+# Default deny for the namespace (cluster DNS excepted). Blocky takes DNS from the LAN, the cluster nodes, CoreDNS and the blackbox exporter,
+# and its HTTP port from Prometheus. It sends only DNS-over-TLS to its four upstreams, HTTPS to the hosts of its deny lists, DNS to the
+# current LAN resolver and the router (conditional zones, client names), and cluster DNS (which resolves the list hosts).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: blocky
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: blocky
+  namespace: blocky
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    # LAN clients
+    - fromCIDRSet:
+        - cidr: 192.168.0.0/16
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # the cluster nodes
+    - fromEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus-blackbox-exporter
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "4000"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+    # the upstreams: DNS-over-TLS only
+    - toCIDR:
+        - 1.1.1.1/32
+        - 1.0.0.1/32
+        - 9.9.9.9/32
+        - 149.112.112.112/32
+      toPorts:
+        - ports:
+            - port: "853"
+              protocol: TCP
+    # the deny list hosts (every downloaded list URL of config.yml; `dns-check.sh render` checks that each host is named here)
+    - toFQDNs:
+        - matchName: raw.githubusercontent.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # conditional zones and client names: the current LAN resolver and the router
+    - toCIDR:
+        - 192.168.1.79/32
+        - 192.168.1.1/32
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP

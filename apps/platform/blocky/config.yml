@@ -1,0 +1,96 @@
+# Blocky configuration, the only source of the resolver's behavior. Change it by pull request; the check
+# `blocky validate --config config.yml` (pinned release) must pass before the merge. Reference: docs of Blocky v0.36.0.
+
+# Public names go only over DNS-over-TLS to four addresses with their certificate names; the addresses need no bootstrap lookup.
+upstreams:
+  groups:
+    default:
+      - tcp-tls:1.1.1.1:853#cloudflare-dns.com
+      - tcp-tls:1.0.0.1:853#cloudflare-dns.com
+      - tcp-tls:9.9.9.9:853#dns.quad9.net
+      - tcp-tls:149.112.112.112:853#dns.quad9.net
+  strategy: parallel_best
+  timeout: 2s
+# The LAN has no IPv6.
+connectIPVersion: v4
+
+# Local names. Everything below lan.chill-town.de is answered here with the gateway address (works without the internet).
+customDNS:
+  customTTL: 5m
+  filterUnmappedTypes: true
+  mapping:
+    lan.chill-town.de: 192.168.1.3
+
+# Zones answered by another resolver. One resolver per zone (several would be asked in parallel and mixed).
+# poecki.local and vault.poecki.de: the current LAN resolver; the reverse zone: the router.
+conditional:
+  mapping:
+    poecki.local: 192.168.1.79
+    vault.poecki.de: 192.168.1.79
+    1.168.192.in-addr.arpa: 192.168.1.1
+
+# Client names in metrics and in the query log come from the router's reverse lookups (addresses when it has no name).
+clientLookup:
+  upstream: 192.168.1.1
+
+# Query path: custom records -> blocking -> cache -> conditional zones -> upstreams.
+blocking:
+  denylists:
+    # StevenBlack unified hosts (README: deny lists). Every downloaded list host is also an exact name in the egress rule of network-policy.yaml.
+    ads:
+      - https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+    # A name that exists nowhere: it proves blocking without depending on a download.
+    canary:
+      - |
+        blocky-canary.chill-town.de
+  # An allow list wins over the deny lists of its group. Add names, URLs or /regex/ lines below.
+  allowlists:
+    ads:
+      - |
+        # no entries yet
+  clientGroupsBlock:
+    default:
+      - ads
+      - canary
+  blockType: zeroIp
+  blockTTL: 1m
+  loading:
+    # A new pod answers only after its lists are loaded, so a surge pod never serves unblocked; a failed download is logged and the pod still starts.
+    strategy: blocking
+    refreshPeriod: 4h
+    downloads:
+      timeout: 60s
+      attempts: 3
+
+caching:
+  prefetching: true
+  maxItemsCount: 100000
+  prefetchMaxItemsCount: 10000
+
+# Not enabled (see README): DNS rebinding protection and DNSSEC validation.
+rebindingProtection:
+  enable: false
+dnssec:
+  validate: false
+
+# Ports: DNS on 53 (UDP and TCP) and the HTTP port 4000 (metrics, API). No DoH, no DoT listener, no profiler.
+ports:
+  dns: 53
+  http: 4000
+prometheus:
+  enable: true
+  path: /metrics
+pprof:
+  enable: false
+
+# One JSON line per resolved query on stdout (collected like every pod log). Special-use names are not logged.
+# To change what is logged: edit the `fields` line (remove an entry to leave that field out), or set `type: none` for no query log.
+queryLog:
+  type: console
+  fields: [clientIP, clientName, responseReason, responseAnswer, question, duration]
+  ignore:
+    sudn: true
+log:
+  level: info
+  format: json
+  privacy: false

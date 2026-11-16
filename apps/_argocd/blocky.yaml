@@ -1,0 +1,21 @@
+# The LAN resolver (Blocky). Synced by hand at first: an Application that is not automated stays out of sync until someone syncs it, and
+# the root waits for every Application of a wave before it creates the next wave, so it sits in the last wave and blocks nothing before it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: blocky
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Izzetee/homelab.git
+    targetRevision: main
+    path: apps/platform/blocky
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: blocky
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
