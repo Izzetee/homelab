@@ -34,7 +34,8 @@ export GIT_CONFIG_GLOBAL=/dev/null
 cd "$t/src"
 git init -q -b main .
 mkdir -p tools/door apps/_argocd apps/tools/demo apps/platform/argocd networking apps/platform/secret-store apps/platform/openbao/config
-cp "$ROOT/tools/door/launcher" "$ROOT/tools/door/door.sh" "$ROOT/tools/door/check.py" tools/door/
+cp "$ROOT/tools/door/launcher" "$ROOT/tools/door/door.sh" "$ROOT/tools/door/check.py" "$ROOT/tools/door/exceptions.txt" tools/door/
+printf 'apps/tools/demo/exc.yaml other/exc-key\n' >>tools/door/exceptions.txt # a test-only line next to the real ones
 cp "$ROOT/.gitleaks.toml" .gitleaks.toml
 printf '# rules\n' >AGENTS.md
 cat >apps/_argocd/demo.yaml <<'YAML'
@@ -229,7 +230,7 @@ door doctor
 [[ $out != 'FAIL door origin' ]] && ok "the SSH form of the fixed URL is accepted" || bad "ssh url form: $out"
 cl remote set-url origin https://github.com/Izzetee/homelab.git
 rc=0
-out=$(cd "$CL" && GIT_CONFIG_VALUE_0="$t/nowhere.git" entries "$HD" doctor 2>&1 </dev/null) || rc=$?
+out=$(cd "$CL" && GIT_CONFIG_KEY_0="url.$t/nowhere.git.insteadOf" entries "$HD" doctor 2>&1 </dev/null) || rc=$?
 [[ $rc != 0 && $out == 'FAIL door source' ]] && ok "endpoint unreachable: FAIL door source, nothing runs" || bad "unreachable: rc=$rc $out"
 cp "$HD" "$t/launcher.keep"
 printf '# changed\n' >>"$HD"
@@ -416,6 +417,42 @@ resources:
 rule_case kust-noext 'FAIL kustomize apps/tools/demo/sub/Kustomization reference' k_noext
 j_sonnet() { put apps/tools/demo/x.jsonnet '{}'; }
 rule_case jsonnet 'FAIL apps apps/tools/demo/x.jsonnet format' j_sonnet
+# the exception list: exact file and exact key only
+exc_es() { # exc_es <file> <store key> [extra spec lines]
+  put "apps/tools/demo/$1" "apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: exc
+  namespace: demo
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: exc
+  data:
+    - secretKey: k
+      remoteRef:
+        key: $2
+        property: x${3:-}"; }
+mkbranch exc-ok
+exc_es exc.yaml other/exc-key
+commit "Read the listed path"
+door --dry-run exc-ok
+[[ $rc == 0 ]] && ok "a listed file with its listed key: accepted" || bad "exception ok: rc=$rc $out"
+e_otherkey() { exc_es exc.yaml other/exc-other; }
+rule_case exc-other-key 'FAIL externalsecret apps/tools/demo/exc.yaml scope' e_otherkey
+e_otherfile() { exc_es exc2.yaml other/exc-key; }
+rule_case exc-other-file 'FAIL externalsecret apps/tools/demo/exc2.yaml scope' e_otherfile
+e_storekind() { exc_es exc.yaml other/exc-key; sed -i.bak 's/kind: ClusterSecretStore/kind: SecretStore/' "$CL/apps/tools/demo/exc.yaml"; rm -f "$CL/apps/tools/demo/exc.yaml.bak"; }
+rule_case exc-store-kind 'FAIL externalsecret apps/tools/demo/exc.yaml scope' e_storekind
+e_otherns() { exc_es exc.yaml other/exc-key; sed -i.bak 's/namespace: demo/namespace: other/' "$CL/apps/tools/demo/exc.yaml"; rm -f "$CL/apps/tools/demo/exc.yaml.bak"; }
+rule_case exc-other-namespace 'FAIL externalsecret apps/tools/demo/exc.yaml scope' e_otherns
+e_widen() { printf 'apps/tools/demo/exc3.yaml platform/cloudflare-dns\n' >>"$CL/tools/door/exceptions.txt"; exc_es exc3.yaml platform/cloudflare-dns; }
+rule_case exc-widened-by-branch 'FAIL externalsecret apps/tools/demo/exc3.yaml scope' e_widen
+# the real list: four lines, the two agentgateway and juraticker files and their two keys, nothing else
+real=$(grep -vE '^[[:space:]]*(#|$)' "$ROOT/tools/door/exceptions.txt")
+[[ $(wc -l <<<"$real" | tr -d ' ') == 4 ]] && ! grep -qvE '^apps/tools/(agentgateway|juraticker)/(external-secrets|kustomization)\.yaml (juraticker/app-config|agentgateway/virtual-keys)$' <<<"$real" && ok "the real exception list: exactly the four known files with their two keys" || bad "real exception list: $real"
 a_skill() { put .agents/skills/x/SKILL.md "Open the panel at $A1 and the other at $A2."; }
 rule_case addr-skill 'FAIL text .agents/skills/x/SKILL.md address' a_skill
 a_msg() { put docs/note.md 'plain'; }

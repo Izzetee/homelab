@@ -1,0 +1,7 @@
+# Existing cross-namespace reads of the secret store that the scope rule would otherwise refuse: one line per file and key, `<file> <store key>`,
+# exact match only. A file that is not listed here, or a key that is not listed for that file, is still refused. The file is part of the door code
+# of the fixed endpoint's main, so a branch cannot widen it.
+apps/tools/agentgateway/external-secrets.yaml juraticker/app-config
+apps/tools/agentgateway/kustomization.yaml juraticker/app-config
+apps/tools/juraticker/external-secrets.yaml agentgateway/virtual-keys
+apps/tools/juraticker/kustomization.yaml agentgateway/virtual-keys
