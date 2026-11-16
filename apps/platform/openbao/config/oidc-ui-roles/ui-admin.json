@@ -1,0 +1,12 @@
+{
+  "role_type": "oidc",
+  "user_claim": "sub",
+  "bound_claims": {"groups": ["authentik Admins"]},
+  "allowed_redirect_uris": ["https://bao.lan.chill-town.de/ui/vault/auth/oidc-ui/oidc/callback"],
+  "oidc_scopes": ["openid", "profile", "email"],
+  "verbose_oidc_logging": false,
+  "token_policies": ["ui-admin"],
+  "token_ttl": "30m",
+  "token_max_ttl": "2h",
+  "token_type": "service"
+}
