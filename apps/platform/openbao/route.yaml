@@ -99,6 +99,10 @@ spec:
           method: POST
         - path:
             type: PathPrefix
+            value: /v1/secret/data/agentgateway/
+          method: PUT
+        - path:
+            type: PathPrefix
             value: /v1/secret/data/juraticker/
           method: GET
         - path:
@@ -107,12 +111,20 @@ spec:
           method: POST
         - path:
             type: PathPrefix
+            value: /v1/secret/data/juraticker/
+          method: PUT
+        - path:
+            type: PathPrefix
             value: /v1/secret/data/open-webui/
           method: GET
         - path:
             type: PathPrefix
             value: /v1/secret/data/open-webui/
           method: POST
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/open-webui/
+          method: PUT
       backendRefs:
         - name: openbao-active
           port: 8200
