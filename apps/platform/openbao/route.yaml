@@ -1,6 +1,7 @@
-# The store's API on the LAN listener only (a name below the LAN zone, never the tunnel), for exactly the paths a login and the agent
-# tools need: the OIDC login endpoints, the three calls on the caller's own token, the agent entries and the create-only app values.
-# Nothing under `sys/` is routed: the system endpoints, metrics and root-token generation stay reachable from inside the cluster only.
+# The store's API and web UI on the LAN listener only (a name below the LAN zone, never the tunnel), for exactly the paths a login, the agent
+# tools and the UI need. First rule: the OIDC login endpoints, the three calls on the caller's own token, the agent entries and the create-only
+# app values. Second rule: the UI files, a few read-only or caller-scoped system endpoints, the UI's own sign-in and the KV calls of the app
+# values, each with its HTTP method. Every other `sys/` path, metrics and root-token generation stay reachable from inside the cluster only.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -36,6 +37,82 @@ spec:
         - path:
             type: PathPrefix
             value: /v1/secret/data/apps/
+      backendRefs:
+        - name: openbao-active
+          port: 8200
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ui
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/health
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/seal-status
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/internal/ui/mounts
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/internal/ui/mounts/secret
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/internal/ui/resultant-acl
+          method: GET
+        - path:
+            type: Exact
+            value: /v1/sys/capabilities-self
+          method: POST
+        - path:
+            type: Exact
+            value: /v1/auth/oidc-ui/oidc/auth_url
+          method: POST
+        - path:
+            type: Exact
+            value: /v1/auth/oidc-ui/oidc/callback
+          method: GET
+        - path:
+            type: PathPrefix
+            value: /v1/secret/metadata/
+          method: GET
+        - path:
+            type: PathPrefix
+            value: /v1/secret/delete/apps/
+          method: POST
+        - path:
+            type: PathPrefix
+            value: /v1/secret/undelete/apps/
+          method: POST
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/agentgateway/
+          method: GET
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/agentgateway/
+          method: POST
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/juraticker/
+          method: GET
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/juraticker/
+          method: POST
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/open-webui/
+          method: GET
+        - path:
+            type: PathPrefix
+            value: /v1/secret/data/open-webui/
+          method: POST
       backendRefs:
         - name: openbao-active
           port: 8200
