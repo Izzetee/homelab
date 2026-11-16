@@ -122,6 +122,11 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: openbao
+    - name: AUTHENTIK_OIDC_OPENBAO_UI_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: openbao-ui
     - name: AUTHENTIK_OIDC_OUTLINE_SECRET
       valueFrom:
         secretKeyRef:

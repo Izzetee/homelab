@@ -1,5 +1,6 @@
 # OpenBao: three servers with integrated Raft storage, TLS from cert-manager (certificates.yaml), unsealed by a static key
-# from a Secret that the bootstrap role creates. Access is only through the Kubernetes auth method; there is no UI and no route.
+# from a Secret that the bootstrap role creates. Access is by the Kubernetes auth method and the two OIDC sign-ins; the web UI is built into the server (`ui = true` below) and
+# is reached only through the LAN route (route.yaml), there is no UI Service.
 global:
   tlsDisable: false
 injector:
@@ -7,6 +8,7 @@ injector:
 csi:
   enabled: false
 ui:
+  # the chart's UI Service stays off: the UI is served by the API listener behind the route
   enabled: false
 server:
   image:
@@ -18,6 +20,8 @@ server:
   # pod to be ready, so a restart of the set goes one pod at a time
   podManagementPolicy: Parallel
   updateStrategyType: RollingUpdate
+  # a change of the server config below rolls the pods (one at a time, each ready only when unsealed)
+  configAnnotation: true
   resources:
     requests:
       cpu: 50m
@@ -65,7 +69,7 @@ server:
       enabled: true
       setNodeId: true
       config: |
-        ui = false
+        ui = true
         listener "tcp" {
           address = "[::]:8200"
           cluster_address = "[::]:8201"

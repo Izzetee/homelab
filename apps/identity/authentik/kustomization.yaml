@@ -13,6 +13,7 @@ configMapGenerator:
       - blueprints/argocd.yaml
       - blueprints/grafana.yaml
       - blueprints/openbao.yaml
+      - blueprints/openbao-ui.yaml
       - blueprints/outline.yaml
       - blueprints/remove-legacy-grafana.yaml
 generatorOptions:
