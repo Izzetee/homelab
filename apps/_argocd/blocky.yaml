@@ -1,5 +1,4 @@
-# The LAN resolver (Blocky). Synced by hand at first: an Application that is not automated stays out of sync until someone syncs it, and
-# the root waits for every Application of a wave before it creates the next wave, so it sits in the last wave and blocks nothing before it.
+# The LAN resolver (Blocky). It sits in the last wave, so the root waits for it only after every other Application.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -17,5 +16,8 @@ spec:
     server: https://kubernetes.default.svc
     namespace: blocky
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
     syncOptions:
       - ServerSideApply=true
