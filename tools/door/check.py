@@ -150,6 +150,24 @@ def app_destination(repo, tip, app):
     return None
 
 
+def load_exceptions():
+    """(file, store key) pairs of tools/door/exceptions.txt: exact lines `<file> <key>`; a malformed line is an error, not an exception."""
+    pairs = set()
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "exceptions.txt"), encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) != 2:
+                    raise RuntimeError("exceptions")
+                pairs.add((parts[0], parts[1]))
+    except OSError:
+        pass
+    return pairs
+
+
 def ref_keys(spec):
     keys = []
     for item in spec.get("data") or []:
@@ -189,8 +207,9 @@ def check_externalsecret(path, doc, app, ns):
     ok_prefixes = tuple(p for p in (f"{ns}/" if ns else None, f"apps/{app}/") if p)
     if not keys and not (spec.get("data") or spec.get("dataFrom")):
         return
+    allowed = load_exceptions()
     for k in keys:
-        if not isinstance(k, str) or ".." in k or not k.startswith(ok_prefixes):
+        if not isinstance(k, str) or ".." in k or not (k.startswith(ok_prefixes) or (path, k) in allowed):
             fail(f"externalsecret {safe(path)} scope")
             return
 
