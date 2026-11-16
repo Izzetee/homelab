@@ -8,7 +8,7 @@
 global:
   image:
     repository: ghcr.io/goauthentik/server
-    tag: 2026.2.7
+    tag: 2026.2.7@sha256:da7024c4a7136b2f0fbbae3740c5ed54633edb393b10dc4fae2cdc056b8f70a8
     digest: sha256:da7024c4a7136b2f0fbbae3740c5ed54633edb393b10dc4fae2cdc056b8f70a8
   # the NFS export of the media volume lists the three virtual machine nodes, which are the amd64 ones
   nodeSelector:
