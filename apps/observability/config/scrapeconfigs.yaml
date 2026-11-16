@@ -1,4 +1,4 @@
-# Scrapes of two LAN devices. The NAS modules: Synology's own MIB, the interface table, and net-snmp's CPU and memory tables (the Synology
+# Scrapes of LAN devices (the NAS and Home Assistant below, the hosts outside the cluster at the end). The NAS modules: Synology's own MIB, the interface table, and net-snmp's CPU and memory tables (the Synology
 # MIB of this DSM carries no CPU or memory values). The NAS is read over SNMPv3 through the SNMP exporter (the exporter is the scrape address, the
 # NAS is the `target` parameter); Home Assistant serves its own metrics endpoint and is read with a bearer token from a Secret.
 # The operator rejects a ScrapeConfig whose Secret key is missing, so nothing is scraped without the token.
@@ -56,3 +56,20 @@ spec:
   staticConfigs:
     - targets:
         - 192.168.1.30:8123
+---
+# Host metrics of machines outside the cluster (an admin host and the virtualization hosts): the distribution's node exporter, listening on the host's
+# LAN address only. The job label is the one of the cluster's node exporters, so the node dashboards and rules cover these hosts too.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: hosts
+  namespace: monitoring
+spec:
+  jobName: node-exporter
+  scheme: HTTP
+  metricsPath: /metrics
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  staticConfigs:
+    - targets:
+        - 192.168.1.98:9100

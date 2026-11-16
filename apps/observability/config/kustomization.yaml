@@ -18,3 +18,5 @@ resources:
   - dashboards/agentgateway.yaml
   - dashboards/dns.yaml
   - dashboards/dns-queries.yaml
+  - dashboards/hosts.yaml
+  - dashboards/host-detail.yaml
