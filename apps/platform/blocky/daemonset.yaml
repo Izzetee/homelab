@@ -1,0 +1,90 @@
+# The LAN resolver, one pod on every amd64 VM node: those are the nodes that announce the load balancer addresses, and the Service
+# keeps the client's address (`externalTrafficPolicy: Local`), so a node answers only while it has a ready local pod. A rollout adds
+# one pod beside the old one and removes the old one only when the new one is ready. No Raspberry Pi runs it.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: blocky
+  namespace: blocky
+  labels:
+    app.kubernetes.io/name: blocky
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blocky
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blocky
+    spec:
+      priorityClassName: system-cluster-critical
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 100
+        seccompProfile:
+          type: RuntimeDefault
+        # port 53 without a capability
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      containers:
+        - name: blocky
+          image: ghcr.io/0xerr0r/blocky:v0.36.0@sha256:191c0f1e688aa37698297ef4059e11a2b080299a878f5b31d6d32ace9d0c54b2
+          args: ["--config", "/etc/blocky/config.yml"]
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: http-metrics
+              containerPort: 4000
+              protocol: TCP
+          # The check asks the pod itself for `healthcheck.blocky` on port 53. The port opens only after the lists are loaded.
+          startupProbe:
+            exec:
+              command: ["/app/blocky", "healthcheck", "-p", "53"]
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["/app/blocky", "healthcheck", "-p", "53"]
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command: ["/app/blocky", "healthcheck", "-p", "53"]
+            periodSeconds: 30
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blocky
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: blocky-config

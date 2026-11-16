@@ -81,3 +81,11 @@ metadata:
   name: wiki
   labels:
     pod-security.kubernetes.io/enforce: restricted
+---
+# The LAN resolver.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blocky
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

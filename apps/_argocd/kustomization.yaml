@@ -35,3 +35,4 @@ resources:
   - juraticker.yaml
   - agentgateway.yaml
   - wiki.yaml
+  - blocky.yaml
