@@ -49,6 +49,25 @@
     - {name: fs.inotify.max_user_instances, value: "512"}
     - {name: fs.inotify.max_user_watches, value: "524288"}
 
+- name: Stop when the container AppArmor profile was rendered for another K3s version
+  ansible.builtin.assert:
+    that: node_prep_cri_apparmor_k3s_version == k3s_version
+    fail_msg: >-
+      The profile in roles/node-prep/templates is rendered from the containerd template of K3s
+      {{ node_prep_cri_apparmor_k3s_version }}, but k3s_version is {{ k3s_version }}: compare the new containerd template,
+      re-render the profile and move node_prep_cri_apparmor_k3s_version (or remove the override once K3s carries the rules).
+    quiet: true
+
+- name: The container AppArmor profile, loaded before K3s starts (stacked-label peers allowed)
+  ansible.builtin.template:
+    src: cri-containerd.apparmor.d.j2
+    dest: /etc/apparmor.d/cri-containerd.apparmor.d
+    owner: "{{ node_prep_owner }}"
+    group: "{{ node_prep_group }}"
+    mode: "0644"
+    validate: apparmor_parser -Q -K %s
+  notify: Replace the container AppArmor profile
+
 - name: Server only, the K3s configuration directory
   ansible.builtin.file:
     path: /etc/rancher/k3s

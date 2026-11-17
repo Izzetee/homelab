@@ -1,3 +1,11 @@
 ---
 node_prep_owner: root
 node_prep_group: root
+# The container AppArmor profile (cri-containerd.apparmor.d): containerd's default profile of the K3s version below, loaded from
+# /etc/apparmor.d before K3s starts. With the switch on it also allows signals and ptrace between processes under the stacked label
+# `cri-containerd.apparmor.d//&unconfined` (newer Ubuntu kernels); off renders containerd's stock text (the rollback).
+node_prep_cri_apparmor_stacked_peers: true
+# The K3s version whose containerd template the profile file renders. node-prep stops when k3s_version differs, so a K3s upgrade
+# forces someone to compare the new containerd template, re-render the file and move this pin (or remove the override once the
+# containerd of K3s carries the stacked-peer rules).
+node_prep_cri_apparmor_k3s_version: v1.34.13+k3s1

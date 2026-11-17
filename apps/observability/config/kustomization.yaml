@@ -5,6 +5,7 @@ resources:
   - probes.yaml
   - scrapeconfigs.yaml
   - grafana-route.yaml
+  - signal-canary.yaml
   - rules/homelab-rules.yaml
   - rules/homelab-secret-store.yaml
   - rules/homelab-nas-ha.yaml

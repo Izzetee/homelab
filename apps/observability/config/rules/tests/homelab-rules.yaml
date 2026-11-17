@@ -433,3 +433,39 @@ tests:
       - eval_time: 50m
         alertname: HomelabLanVipUnprobed
         exp_alerts: []
+  # signal canary not ready on a node
+  - name: signal canary not ready on one node
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="monitoring",pod="signal-canary-a",condition="false"}'
+        values: '1+0x30'
+      - series: 'kube_pod_info{namespace="monitoring",pod="signal-canary-a",node="n1",created_by_kind="DaemonSet",created_by_name="signal-canary"}'
+        values: '1+0x30'
+      - series: 'kube_pod_status_ready{namespace="monitoring",pod="signal-canary-b",condition="false"}'
+        values: '0+0x30'
+      - series: 'kube_pod_info{namespace="monitoring",pod="signal-canary-b",node="n2",created_by_kind="DaemonSet",created_by_name="signal-canary"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HomelabContainerSignalBlocked
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HomelabContainerSignalBlocked
+        exp_alerts:
+          - exp_labels: {severity: critical, node: n1}
+            exp_annotations: {summary: "Containers on node n1 cannot signal each other (AppArmor)"}
+  - name: not ready pod of another workload leaves the canary alert silent
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="monitoring",pod="grafana-x",condition="false"}'
+        values: '1+0x30'
+      - series: 'kube_pod_info{namespace="monitoring",pod="grafana-x",node="n1",created_by_kind="ReplicaSet",created_by_name="grafana-abc"}'
+        values: '1+0x30'
+      - series: 'kube_pod_status_ready{namespace="monitoring",pod="signal-canary-c",condition="false"}'
+        values: '0+0x30'
+      - series: 'kube_pod_info{namespace="monitoring",pod="signal-canary-c",node="n3",created_by_kind="DaemonSet",created_by_name="signal-canary"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HomelabContainerSignalBlocked
+        exp_alerts: []

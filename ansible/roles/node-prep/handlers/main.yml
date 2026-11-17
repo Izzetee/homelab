@@ -3,3 +3,8 @@
   ansible.builtin.systemd_service:
     name: ssh
     state: reloaded
+
+# Replaces the loaded profile; running containers get the new rules at once, nothing restarts. Check mode never runs a handler.
+- name: Replace the container AppArmor profile
+  ansible.builtin.command: apparmor_parser -r /etc/apparmor.d/cri-containerd.apparmor.d
+  changed_when: true
