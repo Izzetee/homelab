@@ -33,6 +33,30 @@ tests:
       - eval_time: 20m
         alertname: HomelabNodeDiskAbove80
         exp_alerts: []
+  # node disk reads above 500 MB/s for 10 minutes
+  - name: node disk read storm
+    interval: 1m
+    input_series:
+      - series: 'node_disk_read_bytes_total{instance="n1",device="nvme0n1"}'
+        values: '0+60000000000x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HomelabNodeDiskReadHigh
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HomelabNodeDiskReadHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: n1, device: nvme0n1}
+            exp_annotations: {summary: "Disk nvme0n1 of n1 reads more than 500 MB/s for 10 minutes"}
+  - name: node disk reads normal
+    interval: 1m
+    input_series:
+      - series: 'node_disk_read_bytes_total{instance="n1",device="nvme0n1"}'
+        values: '0+6000000000x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabNodeDiskReadHigh
+        exp_alerts: []
   # volume above 80 %
   - name: volume full
     interval: 1m
