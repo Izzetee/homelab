@@ -346,9 +346,9 @@ prometheus-node-exporter:
     resources:
       requests:
         cpu: 10m
-        memory: 16Mi
+        memory: 64Mi
       limits:
-        memory: 32Mi
+        memory: 128Mi
   prometheus:
     monitor:
       scheme: https
