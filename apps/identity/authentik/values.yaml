@@ -8,8 +8,8 @@
 global:
   image:
     repository: ghcr.io/goauthentik/server
-    tag: 2026.5.8
-    digest: sha256:0ab5658f7f4963f2964cffe0963fa1ef2fa84c21a259489d6fdded789d82492e
+    tag: 2026.8.5
+    digest: sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
   # the NFS export of the media volume lists the three virtual machine nodes, which are the amd64 ones
   nodeSelector:
     kubernetes.io/arch: amd64
