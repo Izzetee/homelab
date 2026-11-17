@@ -11,6 +11,7 @@ configMapGenerator:
     files:
       - blueprints/agentgateway.yaml
       - blueprints/argocd.yaml
+      - blueprints/deactivate-akadmin.yaml
       - blueprints/grafana.yaml
       - blueprints/openbao.yaml
       - blueprints/openbao-ui.yaml
