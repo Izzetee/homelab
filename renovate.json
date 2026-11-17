@@ -107,10 +107,10 @@
       "enabled": false
     },
     {
-      "description": "Authentik chart and image move together, one major release at a time (no skipping, no downgrade); raise with each upgrade step",
+      "description": "Authentik chart and image move together, one release line at a time (no skipping, no downgrade): the running line and the next one; the next line is merged only by its own upgrade change (dump, drill, checks); raise with each upgrade step",
       "matchDepNames": ["authentik", "ghcr.io/goauthentik/server"],
       "groupName": "authentik",
-      "allowedVersions": "/^2026\\.[2-5]\\./"
+      "allowedVersions": "/^2026\\.(8|11)\\./"
     },
     {
       "description": "Read by the regex manager for repository/tag/digest pins (helm-values would write the digest into the tag)",
