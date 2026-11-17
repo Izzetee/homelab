@@ -122,3 +122,19 @@ spec:
             severity: warning
           annotations:
             summary: "Load balancer address {{ $labels.ip }} of {{ $labels.namespace }}/{{ $labels.service }} has no check from outside the cluster"
+        # Canary DaemonSet `signal-canary` (signal-canary.yaml): not ready on a node means containers there cannot signal their own
+        # child processes, which is what a container AppArmor profile without the stacked-label peer rules does on newer kernels
+        # (databases then lose autovacuum and hang on parallel workers and stops). A missing or unscheduled canary pod is covered
+        # by the default KubeDaemonSet rules.
+        - alert: HomelabContainerSignalBlocked
+          expr: |
+            max by (node) (
+              (kube_pod_status_ready{namespace="monitoring",condition="false"} == 1)
+                * on (namespace, pod) group_left (node)
+              kube_pod_info{namespace="monitoring",created_by_kind="DaemonSet",created_by_name="signal-canary"}
+            )
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Containers on node {{ $labels.node }} cannot signal each other (AppArmor)"
