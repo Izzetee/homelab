@@ -1,15 +1,15 @@
-# Authentik (chart authentik, pinned in the Application). The image is the one that runs today, pinned by digest (the tag only makes
-# tag and digest agree; the digest decides). No Redis (this version keeps cache and queue in the database), no operator, no
-# Kubernetes API access: the chart's service account, Roles and token are off; the pods use a service account of their own without a
-# token (apps/identity/authentik/service-account.yaml).
+# Authentik (chart authentik, pinned in the Application). The image is pinned by digest (the tag only makes tag and digest agree; the
+# digest decides); chart and image move one release line at a time, never skipping one. No Redis (this version keeps cache and queue in
+# the database), no operator, no Kubernetes API access: the chart's service account, Roles and token are off; the pods use a service
+# account of their own without a token (apps/identity/authentik/service-account.yaml).
 # Secrets are never in this file: the secret key and the OIDC client secrets come from the secret store through ExternalSecrets, the
 # database password from the secret CloudNativePG generates. Routes are plain HTTPRoute manifests next to this file (the chart's own
 # route and ingress stay off, so the push check can judge them).
 global:
   image:
     repository: ghcr.io/goauthentik/server
-    tag: 2026.2.7
-    digest: sha256:da7024c4a7136b2f0fbbae3740c5ed54633edb393b10dc4fae2cdc056b8f70a8
+    tag: 2026.5.8
+    digest: sha256:0ab5658f7f4963f2964cffe0963fa1ef2fa84c21a259489d6fdded789d82492e
   # the NFS export of the media volume lists the three virtual machine nodes, which are the amd64 ones
   nodeSelector:
     kubernetes.io/arch: amd64
