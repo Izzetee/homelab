@@ -25,6 +25,32 @@ spec:
       protocol: TCP
       targetPort: dns-tcp
 ---
+# The LAN resolver address: the same pods as blocky-dns, DNS only, from the pool lan-dns (192.168.1.79).
+apiVersion: v1
+kind: Service
+metadata:
+  name: blocky-dns-lan
+  namespace: blocky
+  labels:
+    app.kubernetes.io/name: blocky
+  annotations:
+    lbipam.cilium.io/ips: "192.168.1.79"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  allocateLoadBalancerNodePorts: false
+  selector:
+    app.kubernetes.io/name: blocky
+  ports:
+    - name: dns-udp
+      port: 53
+      protocol: UDP
+      targetPort: dns-udp
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+      targetPort: dns-tcp
+---
 # The HTTP port (metrics).
 apiVersion: v1
 kind: Service

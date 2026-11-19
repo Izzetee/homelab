@@ -1,5 +1,6 @@
 # Extra CoreDNS server block (imported by the pinned CoreDNS as /etc/coredns/custom/*.server). The LAN zone is answered by the
-# Pi-hole; the router's resolver is the fallback and is asked only when the Pi-hole does not answer (not on NXDOMAIN).
+# LAN resolver 192.168.1.79 (Blocky, which forwards the zone to the router); the router itself is the fallback and is asked only when
+# the resolver does not answer (not on NXDOMAIN).
 apiVersion: v1
 kind: ConfigMap
 metadata:
