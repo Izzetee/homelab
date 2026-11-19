@@ -1,4 +1,4 @@
-# Rendered from the K3s v1.35.10+k3s1 add-on manifest(s) by scripts/k3s-images.sh --render: every image at its lock digest, template values filled. Do not edit by hand.
+# Rendered from the K3s v1.36.6+k3s1 add-on manifest(s) by scripts/k3s-images.sh --render: every image at its lock digest, template values filled. Do not edit by hand.
 apiVersion: v1
 kind: ServiceAccount
 metadata:

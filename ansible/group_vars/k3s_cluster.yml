@@ -1,7 +1,7 @@
 ---
 # Non-secret cluster settings (k3s-ansible variables). The join token is NOT here: see group_vars/agent.yml
 # and the k3s-cluster play (token drop-in written by a no_log task).
-k3s_version: v1.35.10+k3s1
+k3s_version: v1.36.6+k3s1
 api_endpoint: 192.168.1.81
 # the admin kubeconfig lands on the controller only (owner-only: the wrapper runs with umask 077)
 kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
@@ -9,9 +9,9 @@ kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
 # collection's airgap path: nothing is downloaded or executed unverified on a node. The binary is the release asset
 # (linux/amd64 and linux/arm64, each with its own pin from the release's sha256sum files), the script is install.sh of the release tag.
 airgap_dir: "{{ lookup('env', 'HOME') }}/.cache/k3smig/airgap"
-k3s_binary_checksum: 5cd49f0faca5b2ea4355d4761e7b1445b8aa05cd50e612fd9c370551db49e5e2
-k3s_binary_checksum_arm64: 0c780ef4b6275bd27c77ed64a647fa1d859b1bd60597ad420f3243c261e5ffb6
-k3s_install_script_checksum: 8598e002e61d658fed7b7542fc6d2c66d8da6eae69e088830105d2ee1ffb6d91
+k3s_binary_checksum: 66ceb8e67edfa547195135d74783bfadc2ecc04a91059e90ae5f70a3dbc98c15
+k3s_binary_checksum_arm64: 49dcecdb4f64f5e92bdc52d204d407fb39729e492f09074488125ee58b6f2895
+k3s_install_script_checksum: 46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad
 # the configuration files the k3s_detect role writes (identical to what the collection would write), so a re-run can tell
 # "nothing changed" from "install and restart"
 k3s_config_dir: /etc/rancher/k3s
