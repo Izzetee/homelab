@@ -4,8 +4,8 @@ The LAN DNS resolver with ad blocking: [Blocky](https://github.com/0xERR0R/block
 balancer address. Its whole configuration is `config.yml` in this directory (a generated ConfigMap, so a changed file replaces the pods);
 there is no state to back up.
 
-- Address: `192.168.1.4` (the test address), UDP and TCP port 53; the LAN resolver address `192.168.1.79` is added by a later change (a second Service
-  in front of the same pods). The Service `blocky-dns` keeps the client's own address (`externalTrafficPolicy: Local`), so
+- Addresses: `192.168.1.79` (the LAN resolver, Service `blocky-dns-lan`, from the pool `lan-dns`) and `192.168.1.4` (the test address, Service
+  `blocky-dns`, from the pool `lan`), UDP and TCP port 53, the same pods. Both Services keep the client's own address (`externalTrafficPolicy: Local`), so
   per-client groups, client metrics and the query log name the real device.
 - Metrics: Service `blocky`, port 4000 (`/metrics`); Prometheus scrapes it as job `blocky`.
 - Rolling update: one extra pod per node, none unavailable; a new pod answers only after its deny lists are loaded.

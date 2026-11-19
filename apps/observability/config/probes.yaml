@@ -34,21 +34,6 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
 metadata:
-  name: pihole-dns
-  namespace: monitoring
-spec:
-  module: dns_pihole
-  interval: 30s
-  prober:
-    url: prometheus-blackbox-exporter.monitoring.svc:9115
-  targets:
-    staticConfig:
-      static:
-        - 192.168.1.79:53
----
-apiVersion: monitoring.coreos.com/v1
-kind: Probe
-metadata:
   name: openbao-active
   namespace: monitoring
 spec:
@@ -313,7 +298,7 @@ spec:
       static:
         - https://llm.lan.chill-town.de/config_dump
 ---
-# The LAN resolver on its load balancer address: a normal name must answer.
+# The LAN resolver on its load balancer address (192.168.1.79): a normal name must answer.
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
 metadata:
@@ -327,7 +312,7 @@ spec:
   targets:
     staticConfig:
       static:
-        - 192.168.1.4:53
+        - 192.168.1.79:53
 ---
 # Blocking works without a download: the inline canary name must answer 0.0.0.0.
 apiVersion: monitoring.coreos.com/v1
@@ -343,7 +328,7 @@ spec:
   targets:
     staticConfig:
       static:
-        - 192.168.1.4:53
+        - 192.168.1.79:53
 ---
 # The two public upstreams of the resolver, each over DNS-over-TLS with its certificate name checked.
 apiVersion: monitoring.coreos.com/v1

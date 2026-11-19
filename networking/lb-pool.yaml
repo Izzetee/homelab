@@ -1,4 +1,4 @@
-# Addresses the load balancer may hand out: 192.168.1.3-192.168.1.5.
+# Addresses the load balancer may hand out: 192.168.1.3-192.168.1.5 (pool lan) and 192.168.1.79 for the LAN resolver only (pool lan-dns).
 apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:
@@ -7,3 +7,18 @@ spec:
   blocks:
     - start: 192.168.1.3
       stop: 192.168.1.5
+---
+# The LAN resolver address. The pool selects one Service by the namespace and name labels Cilium sets itself, so no other Service can take the address by
+# copying a label. 192.168.1.79 lies inside the DHCP range; a fixed reservation in the router keeps DHCP from leasing it.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lan-dns
+spec:
+  blocks:
+    - start: 192.168.1.79
+      stop: 192.168.1.79
+  serviceSelector:
+    matchLabels:
+      io.kubernetes.service.namespace: blocky
+      io.kubernetes.service.name: blocky-dns-lan
