@@ -4,7 +4,8 @@ The LAN DNS resolver with ad blocking: [Blocky](https://github.com/0xERR0R/block
 balancer address. Its whole configuration is `config.yml` in this directory (a generated ConfigMap, so a changed file replaces the pods);
 there is no state to back up.
 
-- Address: `192.168.1.4`, UDP and TCP port 53. The Service `blocky-dns` keeps the client's own address (`externalTrafficPolicy: Local`), so
+- Address: `192.168.1.4` (the test address), UDP and TCP port 53; the LAN resolver address `192.168.1.79` is added by a later change (a second Service
+  in front of the same pods). The Service `blocky-dns` keeps the client's own address (`externalTrafficPolicy: Local`), so
   per-client groups, client metrics and the query log name the real device.
 - Metrics: Service `blocky`, port 4000 (`/metrics`); Prometheus scrapes it as job `blocky`.
 - Rolling update: one extra pod per node, none unavailable; a new pod answers only after its deny lists are loaded.
@@ -16,8 +17,8 @@ Blocky answers in this order, and the first step that matches wins:
 1. custom records (`customDNS`): everything below `lan.chill-town.de` is answered with the gateway address, also without the internet;
 2. blocking (deny and allow lists of the client's groups): a blocked name gets `0.0.0.0` for 1 minute;
 3. cache (with prefetching of often asked names, per pod);
-4. conditional zones (`conditional`): `poecki.local` and `vault.poecki.de` go to the current LAN resolver, the reverse zone
-   `1.168.192.in-addr.arpa` to the router. Conditional names are blocked and cached like any other name;
+4. conditional zones (`conditional`): the zones `local` (it holds `poecki.local`), `vault.poecki.de` and the reverse zone `1.168.192.in-addr.arpa` go
+   to the router, which holds the local records. Conditional names are blocked and cached like any other name;
 5. upstreams: public names go over DNS-over-TLS to Cloudflare (`1.1.1.1`, `1.0.0.1`) and Quad9 (`9.9.9.9`, `149.112.112.112`), the two
    answering fastest of the group win.
 
@@ -31,8 +32,9 @@ Blocky answers in this order, and the first step that matches wins:
 
 ## Deny lists
 
-`blocking.denylists` maps a group name to a list of sources: a URL, a file, or an inline block. Group `ads` is the StevenBlack unified
-hosts list; group `canary` holds one inline name that exists nowhere and is always blocked.
+`blocking.denylists` maps a group name to a list of sources: a URL, a file, or an inline block. Group `ads` holds the block lists of the previous
+resolver (37 URLs); group `adblockoff` holds no entry (see Per-client groups); group `canary` holds one inline name that exists nowhere and is
+always blocked.
 
 - Add a list: put its URL under a group, **and add the list's host as an exact name** (`matchName`) to the `toFQDNs` rule of
   `network-policy.yaml`: the pods may open HTTPS to the named hosts only.
@@ -44,7 +46,7 @@ hosts list; group `canary` holds one inline name that exists nowhere and is alwa
 ## Allow lists
 
 `blocking.allowlists` has the same shape. Inside a group an allow entry beats a deny entry, so allowing a name that a list blocks is one
-line under the same group. An entry is a plain name (also covers its subdomains), a hosts-style line, a URL or file, or a regex between
+line under the same group (group `ads` allows a few names this way). An entry is a plain name (also covers its subdomains), a hosts-style line, a URL or file, or a regex between
 slashes (`/^banners?[_.-]/`). If every group of a client has only allow entries, that client may resolve only those names.
 
 ## Local records
@@ -53,6 +55,8 @@ slashes (`/^banners?[_.-]/`). If every group of a client has only allow entries,
   example AAAA) answer empty instead of being forwarded.
 - `conditional.mapping`: a zone (and its subdomains) is forwarded to one resolver. Use one resolver per zone: several are asked in
   parallel and their answers (an answer and an NXDOMAIN) mix.
+- The local records (static DNS and DHCP client names) live in the router; Blocky forwards the zones `local` and `vault.poecki.de` there, so a name
+  added to the router answers here without a change of this file. Names without a dot are not forwarded.
 - Reverse lookups of the LAN go to the router through the reverse zone; `clientLookup.upstream` uses the router to name clients.
 - A new local name or zone is one line in `config.yml`. A new resolver address needs a matching `toCIDR` entry in the egress rule.
 
@@ -67,7 +71,10 @@ clientGroupsBlock:
   192.168.1.50: [canary]
 ```
 
-This works because the load balancer keeps the client's own address.
+This works because the load balancer keeps the client's own address. Blocky cannot match a hardware address, and a client without a name from
+the router cannot be matched by name: key such a client by an address that never changes (a fixed reservation). Three LAN clients are keyed
+this way to group `adblockoff`, which blocks nothing (an empty deny source; a group with only an allow list would block every other name,
+and an empty key list falls back to `default`).
 
 ## Temporarily switching blocking off
 

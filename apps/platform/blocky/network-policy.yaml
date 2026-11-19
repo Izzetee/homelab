@@ -1,6 +1,6 @@
 # Default deny for the namespace (cluster DNS excepted). Blocky takes DNS from the LAN, the cluster nodes, CoreDNS and the blackbox exporter,
 # and its HTTP port from Prometheus. It sends only DNS-over-TLS to its four upstreams, HTTPS to the hosts of its deny lists, DNS to the
-# current LAN resolver and the router (conditional zones, client names), and cluster DNS (which resolves the list hosts).
+# router (conditional zones, client names), and cluster DNS (which resolves the list hosts).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -105,14 +105,21 @@ spec:
               protocol: TCP
     # the deny list hosts (every downloaded list URL of config.yml; `dns-check.sh render` checks that each host is named here)
     - toFQDNs:
+        - matchName: adaway.org
+        - matchName: big.oisd.nl
+        - matchName: bitbucket.org
+        - matchName: gitlab.com
+        - matchName: hostfiles.frogeye.fr
+        - matchName: lists.cyberhost.uk
+        - matchName: phishing.army
         - matchName: raw.githubusercontent.com
+        - matchName: v.firebog.net
       toPorts:
         - ports:
             - port: "443"
               protocol: TCP
-    # conditional zones and client names: the current LAN resolver and the router
+    # conditional zones and client names: the router
     - toCIDR:
-        - 192.168.1.79/32
         - 192.168.1.1/32
       toPorts:
         - ports:
