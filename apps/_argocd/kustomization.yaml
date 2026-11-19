@@ -36,3 +36,4 @@ resources:
   - agentgateway.yaml
   - wiki.yaml
   - blocky.yaml
+  - hl-access.yaml

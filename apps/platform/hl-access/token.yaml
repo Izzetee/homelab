@@ -1,0 +1,10 @@
+# Token for the ServiceAccount of rbac.yaml; the cluster fills in the content.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hl-reader-token
+  namespace: hl-access
+  annotations:
+    kubernetes.io/service-account.name: hl-reader
+    argocd.argoproj.io/sync-wave: "1"
+type: kubernetes.io/service-account-token
