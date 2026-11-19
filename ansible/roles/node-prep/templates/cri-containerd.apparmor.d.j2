@@ -1,7 +1,7 @@
 # The default container AppArmor profile of containerd, loaded before K3s starts (role node-prep).
-# Source: containerd contrib/apparmor/template.go of github.com/k3s-io/containerd at v2.2.10-k3s1 (the containerd of K3s
-# {{ node_prep_cri_apparmor_k3s_version }}), rendered for these inputs: abi/3.0, tunables/global, abstractions/base, daemon profile
-# unconfined, no RootlessKit. Re-render it from the new template at every K3s upgrade.
+# Source: containerd contrib/apparmor/template.go of github.com/k3s-io/containerd at v2.2.10-k3s1 (the containerd of the K3s
+# version pinned in node_prep_cri_apparmor_k3s_version), rendered for these inputs: abi/3.0, tunables/global, abstractions/base, daemon
+# profile unconfined, no RootlessKit. Re-render it from the new template at every K3s upgrade.
 {% if node_prep_cri_apparmor_stacked_peers %}
 # Added on top of that text: the two peer rules of containerd pull request 14487 (containerd/containerd#14487). A newer
 # kernel stacks the profile with `unconfined` for container processes, so their label is `cri-containerd.apparmor.d//&unconfined`
