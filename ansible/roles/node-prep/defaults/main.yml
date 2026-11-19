@@ -8,4 +8,4 @@ node_prep_cri_apparmor_stacked_peers: true
 # The K3s version whose containerd template the profile file renders. node-prep stops when k3s_version differs, so a K3s upgrade
 # forces someone to compare the new containerd template, re-render the file and move this pin (or remove the override once the
 # containerd of K3s carries the stacked-peer rules).
-node_prep_cri_apparmor_k3s_version: v1.36.6+k3s1
+node_prep_cri_apparmor_k3s_version: v1.37.2+k3s1
