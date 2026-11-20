@@ -1,0 +1,10 @@
+# Token for the ServiceAccount of operator.yaml; the cluster fills in the content.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hl-operator-token
+  namespace: hl-access
+  annotations:
+    kubernetes.io/service-account.name: hl-operator
+    argocd.argoproj.io/sync-wave: "1"
+type: kubernetes.io/service-account-token
