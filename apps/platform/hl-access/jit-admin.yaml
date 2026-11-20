@@ -1,0 +1,222 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hl-admin-jit
+  namespace: hl-access
+automountServiceAccountToken: false
+---
+# Short-lived admin in the six app namespaces, used only through tokens of at most one hour (see hl-operator-token-ttl below).
+# Pods, their exec and log subresources, Jobs and read access to CronJobs and ConfigMaps. No Secret API access, RBAC, ServiceAccounts, volumes,
+# Deployment writes, port-forward, attach or ephemeral containers; nothing cluster-scoped. The policy hl-admin-jit-workloads below bounds the pods and Jobs it creates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hl-admin-jit
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: affine
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: juraticker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: n8n
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: open-webui
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: uptime-kuma
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: wiki
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
+# The operator may request tokens for this one ServiceAccount and no other.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hl-operator-mint-jit
+  namespace: hl-access
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["hl-admin-jit"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-operator-mint-jit
+  namespace: hl-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hl-operator-mint-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-operator
+    namespace: hl-access
+---
+# Caps the lifetime of every token the ServiceAccount hl-operator requests at one hour. Requests of every other user are never evaluated.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hl-operator-token-ttl
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["serviceaccounts/token"]
+  matchConditions:
+    - name: operator-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator'"
+  validations:
+    - expression: "object.spec.expirationSeconds <= 3600"
+      message: "token lifetime of the operator is limited to 3600 seconds"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-token-ttl
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-token-ttl
+  validationActions: ["Deny"]
+---
+# Every Pod and Job this ServiceAccount creates must end within an hour, must not mount a ServiceAccount token and must not run as another ServiceAccount, so nothing it
+# starts outlives its token with extra rights. Requests of every other user are never evaluated.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hl-admin-jit-workloads
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: jit-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit'"
+  variables:
+    # the pod spec of a Pod, or of the template of a Job
+    - name: pod
+      expression: "request.resource.resource == 'pods' ? dyn(object.spec) : dyn(object.spec.template.spec)"
+  validations:
+    - expression: "has(dyn(object.spec).activeDeadlineSeconds) && dyn(object.spec).activeDeadlineSeconds > 0 && dyn(object.spec).activeDeadlineSeconds <= 3600"
+      message: "pods and Jobs of this identity need activeDeadlineSeconds of at most 3600"
+    - expression: "has(variables.pod.automountServiceAccountToken) && !variables.pod.automountServiceAccountToken"
+      message: "pods and Jobs of this identity must set automountServiceAccountToken to false"
+    - expression: "(!has(variables.pod.serviceAccountName) || variables.pod.serviceAccountName == 'default') && (!has(variables.pod.serviceAccount) || variables.pod.serviceAccount == 'default')"
+      message: "pods and Jobs of this identity must run as the default ServiceAccount"
+    - expression: "!has(variables.pod.volumes) || variables.pod.volumes.all(v, !has(v.projected) || !v.projected.sources.exists(s, has(s.serviceAccountToken)))"
+      message: "pods and Jobs of this identity must not project a ServiceAccount token"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-admin-jit-workloads
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-admin-jit-workloads
+  validationActions: ["Deny"]
