@@ -14,6 +14,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: cloudflared
+      annotations:
+        # changes with the origin in the ConfigMap, which cloudflared reads only at start: the pods roll with it
+        homelab.io/origin: cilium-gateway-homelab-tunnel
     spec:
       automountServiceAccountToken: false
       securityContext:

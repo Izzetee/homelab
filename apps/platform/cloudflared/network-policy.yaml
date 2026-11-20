@@ -1,4 +1,4 @@
-# cloudflared may talk to cluster DNS, to the gateway and to the internet outside the private ranges (the tunnel
+# cloudflared may talk to cluster DNS, to the tunnel gateway and to the internet outside the private ranges (the tunnel
 # connects out on 7844, the update and API endpoints use 443). Nothing may connect to it, and it cannot reach any
 # other address of the LAN.
 apiVersion: cilium.io/v2
@@ -23,7 +23,8 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
-    # the gateway's proxy answers for the Service address of the Gateway on its own identity
+    # the gateway's proxy answers for the Service address of the Gateway on its own identity; this rule covers port 80 of every gateway
+    # proxy, and the plain-HTTP listener of the tunnel gateway is meant to be the only one
     - toEntities:
         - ingress
       toPorts:
@@ -33,7 +34,7 @@ spec:
     - toServices:
         - k8sService:
             namespace: gateway
-            serviceName: cilium-gateway-homelab
+            serviceName: cilium-gateway-homelab-tunnel
     # the backends that may be reached through the tunnel: the gateway's proxy applies the policy of the connecting pod to the leg to the
     # backend, so every public application is listed here (and nothing else is reachable through the tunnel)
     - toEndpoints:
