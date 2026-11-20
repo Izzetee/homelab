@@ -1,7 +1,7 @@
 # Admission guard for the ServiceAccount hl-operator (operator.yaml): a Job it creates is admitted only when it is an unaltered
-# manual copy (kubectl create job --from) of the CronJob labelled homelab.io/backup=true in the request namespace.
-# Requests of every other user pass untouched. The binding below needs exactly one such CronJob per listed namespace: a removed
-# label denies every Job create there (fail closed), a second labelled CronJob denies every Job of the operator there.
+# manual copy (kubectl create job --from) of the named backup CronJob of the request namespace, which must carry the label
+# homelab.io/backup=true. Requests of every other user pass untouched: the bindings below use parameterNotFoundAction Allow, so a
+# missing or renamed CronJob never denies anyone's Job (and a removed label denies only this ServiceAccount).
 # Object-typed values are compared with dyn() on both sides so the policy's type check stays free of warnings.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -39,6 +39,10 @@ spec:
   validations:
     - expression: "params != null"
       message: "namespace not open for the operator"
+    - expression: >-
+        params == null ||
+        ('homelab.io/backup' in params.metadata.?labels.orValue({}) && params.metadata.labels['homelab.io/backup'] == 'true')
+      message: "the CronJob is not marked as a backup"
     - expression: >-
         params == null || (
         object.metadata.?ownerReferences.orValue([]).size() == 1 &&
@@ -112,27 +116,115 @@ spec:
         object.metadata.?finalizers.orValue([]).size() == 0)
       message: "job labels, annotations or finalizers differ from the CronJob"
 ---
-# The namespaces whose backup CronJob the operator may start (the same list as the RoleBindings in operator.yaml).
+# One binding per namespace whose backup CronJob the operator may start (the same namespaces as the RoleBindings in operator.yaml);
+# the parameter is that CronJob by name. Not found = no evaluation for anyone (Allow), so nobody's Job is ever denied by a missing parameter.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: hl-operator-jobs
+  name: hl-operator-jobs-affine
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   policyName: hl-operator-jobs
   validationActions: ["Deny"]
   paramRef:
-    selector:
-      matchLabels:
-        homelab.io/backup: "true"
-    parameterNotFoundAction: Deny
+    name: affine-pg-dump
+    namespace: affine
+    parameterNotFoundAction: Allow
   matchResources:
     namespaceSelector:
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: In
-          values: ["affine", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
+      matchLabels:
+        kubernetes.io/metadata.name: affine
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-juraticker
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: juraticker-pg-dump
+    namespace: juraticker
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: juraticker
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-n8n
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: n8n-backup
+    namespace: n8n
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: n8n
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-open-webui
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: open-webui-backup
+    namespace: open-webui
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: open-webui
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-uptime-kuma
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: uptime-kuma-backup
+    namespace: uptime-kuma
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: uptime-kuma
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-wiki
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: wiki-pg-dump
+    namespace: wiki
+    parameterNotFoundAction: Allow
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: wiki
 ---
 # Every other namespace: no parameter, so the operator is denied there; requests of other users are skipped by the policy.
 apiVersion: admissionregistration.k8s.io/v1
