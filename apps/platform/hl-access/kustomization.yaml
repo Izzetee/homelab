@@ -7,3 +7,4 @@ resources:
   - operator.yaml
   - operator-policy.yaml
   - operator-token.yaml
+  - jit-admin.yaml
