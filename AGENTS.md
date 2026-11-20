@@ -45,6 +45,8 @@ Nothing here pushes into the cluster.
 - **Publishing**: only through `homelab-door` (install it once with `tools/door/launcher install`). It checks every push and PR text and merges
   only a change inside one existing application directory (`apps/tools/<app>/`). **The owner merges everything else** (new applications, platform,
   identity, observability, networking, docs, tools, agent rules, CI) with `gh pr merge <n> --rebase --match-head-commit <reviewed sha>`. Skill `publish`.
+  Until `homelab-door` is installed in a clone at the door cutover, publishing follows the clone's active pre-push hook; agents do not install
+  `homelab-door` themselves.
 - **The owner's go** is needed before deleting anything that exists, before changing an access control or a credential, and before a public hostname
   is opted in. Create new things freely; remove nothing without the go.
 - **Changelog**: after every merged pull request write one entry in the private wiki collection `Changelog` and update the `operations` pages the
