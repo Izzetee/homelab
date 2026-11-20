@@ -1,0 +1,25 @@
+# Gateway ingress policy: cloudflared may use port 80 of the gateways only.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: cloudflared-gateway-port-80-only
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: reserved:ingress
+        operator: Exists
+  enableDefaultDeny:
+    ingress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cloudflared
+            app.kubernetes.io/name: cloudflared
+      toPorts:
+        - ports:
+            - port: "1"
+              endPort: 79
+              protocol: TCP
+            - port: "81"
+              endPort: 65535
+              protocol: TCP

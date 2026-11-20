@@ -6,3 +6,4 @@ resources:
   - deployment.yaml
   - pdb.yaml
   - network-policy.yaml
+  - gateway-ingress-policy.yaml
