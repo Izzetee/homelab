@@ -1,7 +1,10 @@
-# Admission guard for the ServiceAccount hl-operator (operator.yaml): a Job it creates is admitted only when it is an unaltered
-# manual copy (kubectl create job --from) of the named backup CronJob of the request namespace, which must carry the label
-# homelab.io/backup=true. Requests of every other user pass untouched: the bindings below use parameterNotFoundAction Allow, so a
-# missing or renamed CronJob never denies anyone's Job (and a removed label denies only this ServiceAccount).
+# Admission guard for the ServiceAccount hl-operator (operator.yaml), in three parts:
+#  1. a MutatingAdmissionPolicy that marks every Job this ServiceAccount creates with the label homelab.io/hl-operator=true;
+#  2. a ValidatingAdmissionPolicy that admits a marked Job only when it is an unaltered manual copy (kubectl create job --from) of the
+#     named backup CronJob of the request namespace, which must carry the label homelab.io/backup=true;
+#  3. bindings: one per namespace with the CronJob as parameter (Deny when it is missing, but only for marked Jobs), one that denies this
+#     ServiceAccount in every other namespace, and one that denies it wherever the mark is missing (policy 1 absent or broken).
+# Requests of every other user never carry the mark and are never evaluated: a missing or renamed CronJob cannot deny anyone else's Job.
 # Object-typed values are compared with dyn() on both sides so the policy's type check stays free of warnings.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -107,8 +110,9 @@ spec:
         params == null || (
         variables.tplJobLabels.all(k, k in object.metadata.?labels.orValue({}) &&
         object.metadata.labels[k] == variables.tplJobLabels[k]) &&
-        object.metadata.?labels.orValue({}).all(k, k in variables.tplJobLabels ||
+        object.metadata.?labels.orValue({}).all(k, k in variables.tplJobLabels || k == 'homelab.io/hl-operator' ||
         k in ['controller-uid', 'job-name', 'batch.kubernetes.io/controller-uid', 'batch.kubernetes.io/job-name']) &&
+        'homelab.io/hl-operator' in object.metadata.?labels.orValue({}) && object.metadata.labels['homelab.io/hl-operator'] == 'true' &&
         variables.tplJobAnnotations.all(k, k in object.metadata.?annotations.orValue({}) &&
         object.metadata.annotations[k] == variables.tplJobAnnotations[k]) &&
         object.metadata.?annotations.orValue({}).all(k, k in variables.tplJobAnnotations ||
@@ -117,7 +121,8 @@ spec:
       message: "job labels, annotations or finalizers differ from the CronJob"
 ---
 # One binding per namespace whose backup CronJob the operator may start (the same namespaces as the RoleBindings in operator.yaml);
-# the parameter is that CronJob by name. Not found = no evaluation for anyone (Allow), so nobody's Job is ever denied by a missing parameter.
+# the parameter is that CronJob by name. It only matches marked Jobs (the mark is set by the ServiceAccount's own requests), so a missing
+# CronJob (Deny) stops the operator and nobody else.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -130,8 +135,11 @@ spec:
   paramRef:
     name: affine-pg-dump
     namespace: affine
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: affine
@@ -148,8 +156,11 @@ spec:
   paramRef:
     name: juraticker-pg-dump
     namespace: juraticker
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: juraticker
@@ -166,8 +177,11 @@ spec:
   paramRef:
     name: n8n-backup
     namespace: n8n
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: n8n
@@ -184,8 +198,11 @@ spec:
   paramRef:
     name: open-webui-backup
     namespace: open-webui
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: open-webui
@@ -202,8 +219,11 @@ spec:
   paramRef:
     name: uptime-kuma-backup
     namespace: uptime-kuma
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: uptime-kuma
@@ -220,8 +240,11 @@ spec:
   paramRef:
     name: wiki-pg-dump
     namespace: wiki
-    parameterNotFoundAction: Allow
+    parameterNotFoundAction: Deny
   matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: wiki
@@ -242,3 +265,55 @@ spec:
         - key: kubernetes.io/metadata.name
           operator: NotIn
           values: ["affine", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
+---
+# Wherever the mark is missing (the marking policy absent or broken, or a different value): no parameter, so the operator is denied.
+# NotIn matches Jobs without the label as well. Requests of other users are skipped by the policy's match condition.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-untagged
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  matchResources:
+    objectSelector:
+      matchExpressions:
+        - key: homelab.io/hl-operator
+          operator: NotIn
+          values: ["true"]
+---
+# Marks every Job of the ServiceAccount (mutating admission runs before validating admission; a value sent by the client is replaced).
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: hl-operator-tag
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: operator-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator'"
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{ metadata: Object.metadata{ labels: {"homelab.io/hl-operator": "true"} } }
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-tag
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-tag
