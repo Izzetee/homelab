@@ -1,0 +1,152 @@
+# Admission guard for the ServiceAccount hl-operator (operator.yaml): a Job it creates is admitted only when it is an unaltered
+# manual copy (kubectl create job --from) of the CronJob labelled homelab.io/backup=true in the request namespace.
+# Requests of every other user pass untouched. The binding below needs exactly one such CronJob per listed namespace: a removed
+# label denies every Job create there (fail closed), a second labelled CronJob denies every Job of the operator there.
+# Object-typed values are compared with dyn() on both sides so the policy's type check stays free of warnings.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hl-operator-jobs
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: batch/v1
+    kind: CronJob
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: operator-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator'"
+  variables:
+    - name: tpl
+      expression: "params.spec.jobTemplate"
+    # labels and annotations of the CronJob's pod template and Job template (absent = empty)
+    - name: tplPodLabels
+      expression: "variables.tpl.spec.template.?metadata.?labels.orValue({})"
+    - name: tplPodAnnotations
+      expression: "variables.tpl.spec.template.?metadata.?annotations.orValue({})"
+    # a Job without labels of its own gets the pod template labels
+    - name: tplJobLabels
+      expression: "variables.tpl.?metadata.?labels.orValue(variables.tplPodLabels)"
+    - name: tplJobAnnotations
+      expression: "variables.tpl.?metadata.?annotations.orValue({})"
+  validations:
+    - expression: "params != null"
+      message: "namespace not open for the operator"
+    - expression: >-
+        params == null || (
+        object.metadata.?ownerReferences.orValue([]).size() == 1 &&
+        object.metadata.ownerReferences[0].apiVersion == 'batch/v1' &&
+        object.metadata.ownerReferences[0].kind == 'CronJob' &&
+        object.metadata.ownerReferences[0].name == params.metadata.name &&
+        object.metadata.ownerReferences[0].uid == params.metadata.uid &&
+        object.metadata.ownerReferences[0].?controller.orValue(false) &&
+        !object.metadata.ownerReferences[0].?blockOwnerDeletion.orValue(false))
+      message: "job is not owned by the backup CronJob of the namespace"
+    - expression: >-
+        params == null || (
+        'cronjob.kubernetes.io/instantiate' in object.metadata.?annotations.orValue({}) &&
+        object.metadata.annotations['cronjob.kubernetes.io/instantiate'] == 'manual')
+      message: "job is not marked as a manual run"
+    - expression: >-
+        params == null || (
+        object.metadata.name.startsWith(params.metadata.name + '-manual-') &&
+        size(object.metadata.name) > size(params.metadata.name) + 8)
+      message: "job name is not <cronjob>-manual-<suffix>"
+    - expression: "params == null || dyn(object.spec.template.spec) == dyn(params.spec.jobTemplate.spec.template.spec)"
+      message: "pod spec differs from the CronJob"
+    - expression: >-
+        params == null || (
+        variables.tplPodLabels.all(k, k in object.spec.template.?metadata.?labels.orValue({}) &&
+        object.spec.template.metadata.labels[k] == variables.tplPodLabels[k]) &&
+        object.spec.template.?metadata.?labels.orValue({}).all(k, k in variables.tplPodLabels ||
+        k in ['controller-uid', 'job-name', 'batch.kubernetes.io/controller-uid', 'batch.kubernetes.io/job-name']) &&
+        object.spec.template.?metadata.?annotations.orValue({}) == variables.tplPodAnnotations &&
+        object.spec.template.?metadata.?finalizers.orValue([]).size() == 0)
+      message: "pod labels, annotations or finalizers differ from the CronJob"
+    - expression: >-
+        params == null || (
+        dyn(object.spec).all(k, k in ['parallelism', 'completions', 'activeDeadlineSeconds', 'podFailurePolicy', 'successPolicy',
+        'backoffLimit', 'backoffLimitPerIndex', 'maxFailedIndexes', 'selector', 'manualSelector', 'template', 'ttlSecondsAfterFinished',
+        'completionMode', 'suspend', 'podReplacementPolicy', 'managedBy', 'scheduling']) &&
+        object.spec.?parallelism.orValue(-1) == variables.tpl.spec.?parallelism.orValue(1) &&
+        object.spec.?completions.orValue(-1) == variables.tpl.spec.?completions.orValue(has(variables.tpl.spec.parallelism) ? -1 : 1) &&
+        object.spec.?backoffLimit.orValue(-1) == variables.tpl.spec.?backoffLimit.orValue(
+        has(variables.tpl.spec.backoffLimitPerIndex) ? 2147483647 : 6) &&
+        object.spec.?completionMode.orValue('') == variables.tpl.spec.?completionMode.orValue('NonIndexed') &&
+        object.spec.?podReplacementPolicy.orValue('') == variables.tpl.spec.?podReplacementPolicy.orValue(
+        has(variables.tpl.spec.podFailurePolicy) ? 'Failed' : 'TerminatingOrFailed') &&
+        object.spec.?suspend.orValue(false) == false &&
+        object.spec.?manualSelector.orValue(false) == false &&
+        object.spec.?activeDeadlineSeconds.orValue(-1) == variables.tpl.spec.?activeDeadlineSeconds.orValue(-1) &&
+        object.spec.?ttlSecondsAfterFinished.orValue(-1) == variables.tpl.spec.?ttlSecondsAfterFinished.orValue(-1) &&
+        object.spec.?backoffLimitPerIndex.orValue(-1) == variables.tpl.spec.?backoffLimitPerIndex.orValue(-1) &&
+        object.spec.?maxFailedIndexes.orValue(-1) == variables.tpl.spec.?maxFailedIndexes.orValue(-1) &&
+        object.spec.?managedBy.orValue('') == variables.tpl.spec.?managedBy.orValue('') &&
+        has(object.spec.podFailurePolicy) == has(variables.tpl.spec.podFailurePolicy) &&
+        (!has(object.spec.podFailurePolicy) || dyn(object.spec.podFailurePolicy) == dyn(variables.tpl.spec.podFailurePolicy)) &&
+        has(object.spec.successPolicy) == has(variables.tpl.spec.successPolicy) &&
+        (!has(object.spec.successPolicy) || dyn(object.spec.successPolicy) == dyn(variables.tpl.spec.successPolicy)) &&
+        has(object.spec.scheduling) == has(variables.tpl.spec.scheduling) &&
+        (!has(object.spec.scheduling) || dyn(object.spec.scheduling) == dyn(variables.tpl.spec.scheduling)) &&
+        has(object.spec.selector) && !has(object.spec.selector.matchExpressions) &&
+        object.spec.selector.?matchLabels.orValue({}).size() == 1 &&
+        'batch.kubernetes.io/controller-uid' in object.spec.selector.?matchLabels.orValue({}))
+      message: "job spec differs from the CronJob"
+    - expression: >-
+        params == null || (
+        variables.tplJobLabels.all(k, k in object.metadata.?labels.orValue({}) &&
+        object.metadata.labels[k] == variables.tplJobLabels[k]) &&
+        object.metadata.?labels.orValue({}).all(k, k in variables.tplJobLabels ||
+        k in ['controller-uid', 'job-name', 'batch.kubernetes.io/controller-uid', 'batch.kubernetes.io/job-name']) &&
+        variables.tplJobAnnotations.all(k, k in object.metadata.?annotations.orValue({}) &&
+        object.metadata.annotations[k] == variables.tplJobAnnotations[k]) &&
+        object.metadata.?annotations.orValue({}).all(k, k in variables.tplJobAnnotations ||
+        k == 'cronjob.kubernetes.io/instantiate') &&
+        object.metadata.?finalizers.orValue([]).size() == 0)
+      message: "job labels, annotations or finalizers differ from the CronJob"
+---
+# The namespaces whose backup CronJob the operator may start (the same list as the RoleBindings in operator.yaml).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    selector:
+      matchLabels:
+        homelab.io/backup: "true"
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: ["affine", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
+---
+# Every other namespace: no parameter, so the operator is denied there; requests of other users are skipped by the policy.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-elsewhere
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: ["affine", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]

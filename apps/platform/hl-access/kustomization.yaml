@@ -4,3 +4,6 @@ resources:
   - namespace.yaml
   - rbac.yaml
   - token.yaml
+  - operator.yaml
+  - operator-policy.yaml
+  - operator-token.yaml
