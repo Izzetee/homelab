@@ -8,6 +8,9 @@ spec:
     - name: homelab
       namespace: gateway
       sectionName: tunnel
+    - name: homelab-tunnel
+      namespace: gateway
+      sectionName: tunnel
   hostnames:
     - gpt.chill-town.de
   rules:

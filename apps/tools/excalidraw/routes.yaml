@@ -10,6 +10,9 @@ spec:
     - name: homelab
       namespace: gateway
       sectionName: tunnel
+    - name: homelab-tunnel
+      namespace: gateway
+      sectionName: tunnel
   hostnames:
     - excalidraw.chill-town.de
   rules:
