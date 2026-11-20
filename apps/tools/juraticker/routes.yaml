@@ -9,9 +9,6 @@ spec:
     - name: homelab
       namespace: gateway
       sectionName: tunnel
-    - name: homelab-tunnel
-      namespace: gateway
-      sectionName: tunnel
   hostnames:
     - juraticker.chill-town.de
   rules:
@@ -54,9 +51,6 @@ metadata:
 spec:
   parentRefs:
     - name: homelab
-      namespace: gateway
-      sectionName: tunnel
-    - name: homelab-tunnel
       namespace: gateway
       sectionName: tunnel
   hostnames:
