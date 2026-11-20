@@ -84,6 +84,17 @@ spec:
             severity: critical
           annotations:
             summary: "Backup job {{ $labels.cronjob }} in {{ $labels.namespace }} has no success for more than 26 hours"
+        # A backup CronJob that was labelled homelab.io/backup=true in the last 3 days and is not any more (label removed or CronJob gone):
+        # HomelabBackupTooOld above only looks at labelled CronJobs, so this case would otherwise be silent.
+        - alert: HomelabBackupLabelLost
+          expr: |
+            max by (namespace, cronjob) (max_over_time(kube_cronjob_labels{label_homelab_io_backup="true"}[3d]))
+              unless on (namespace, cronjob) kube_cronjob_labels{label_homelab_io_backup="true"}
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backup CronJob {{ $labels.cronjob }} in {{ $labels.namespace }} lost its backup label or was removed"
         - alert: HomelabEtcdSnapshotTooOld
           expr: |
             time() - max(homelab_etcd_snapshot_created_timestamp_seconds

@@ -299,6 +299,29 @@ tests:
       - eval_time: 30h
         alertname: HomelabBackupTooOld
         exp_alerts: []
+  # a backup CronJob that loses its label (the series with the label ends, one without it starts)
+  - name: backup label lost
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup="true"}'
+        values: '1+0x60 _x200'
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup=""}'
+        values: '_x61 1+0x200'
+    alert_rule_test:
+      - eval_time: 100m
+        alertname: HomelabBackupLabelLost
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: backup, cronjob: nightly}
+            exp_annotations: {summary: "Backup CronJob nightly in backup lost its backup label or was removed"}
+  - name: backup label kept
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_labels{namespace="backup",cronjob="nightly",label_homelab_io_backup="true"}'
+        values: '1+0x260'
+    alert_rule_test:
+      - eval_time: 100m
+        alertname: HomelabBackupLabelLost
+        exp_alerts: []
   # etcd snapshots: the newest ready one older than 7 hours, or none at all
   - name: etcd snapshot too old
     interval: 1m
