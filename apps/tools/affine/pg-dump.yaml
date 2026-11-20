@@ -42,6 +42,7 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   pg_dump -Fc -h affine-db-r -U affine -d affine -f "/backup/affine-$stamp.dump"
                   (cd /backup && sha256sum "affine-$stamp.dump" >"affine-$stamp.dump.sha256")
+                  printf %s "affine-$stamp" >/dev/termination-log
                   cd /backup
                   ls -1 affine-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
                   echo "dump affine-$stamp.dump written"

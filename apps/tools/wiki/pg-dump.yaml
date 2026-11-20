@@ -58,6 +58,7 @@ spec:
                   nfiles=$(tr -cd '\0' <"$list" | wc -c | tr -d ' ')
                   (cd /data && xargs -0 -r sha256sum <"$list") | sed 's|^\([0-9a-f]\{64\}\)  \./|\1  |' >"$stamp.files.sha256"
                   ok=1
+                  printf %s "$stamp" >/dev/termination-log
                   ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
                   # names as users upload them (spaces, Unicode, quotes) are fine; a control character or a backslash is not (the pull and the restore refuse them too)
                   bad=$({ grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$stamp.files.sha256" || true; })

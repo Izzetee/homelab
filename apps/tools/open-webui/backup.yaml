@@ -86,6 +86,7 @@ spec:
                           os.remove(old)
                           if os.path.exists(old + ".sha256"):
                               os.remove(old + ".sha256")
+                  open("/dev/termination-log", "w").write(base)
                   print(f"backup {base} written")
               resources:
                 requests:

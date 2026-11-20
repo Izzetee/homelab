@@ -44,6 +44,7 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   pg_dump -Fc -h juraticker-db-r -U juraticker -d juraticker -f "/backup/juraticker-$stamp.dump"
                   (cd /backup && sha256sum "juraticker-$stamp.dump" >"juraticker-$stamp.dump.sha256")
+                  printf %s "juraticker-$stamp" >/dev/termination-log
                   cd /backup
                   ls -1 juraticker-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
                   echo "dump juraticker-$stamp.dump written"
