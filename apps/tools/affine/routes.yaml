@@ -5,9 +5,6 @@ metadata:
   namespace: affine
 spec:
   parentRefs:
-    - name: homelab
-      namespace: gateway
-      sectionName: tunnel
     - name: homelab-tunnel
       namespace: gateway
       sectionName: tunnel

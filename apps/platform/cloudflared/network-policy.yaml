@@ -23,8 +23,7 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
-    # the gateway's proxy answers for the Service address of the Gateway on its own identity; this rule covers port 80 of every gateway
-    # proxy, and the plain-HTTP listener of the tunnel gateway is meant to be the only one
+    # the gateway's proxy answers for the Service address of the Gateway on its own identity (port 80 of the tunnel gateway)
     - toEntities:
         - ingress
       toPorts:

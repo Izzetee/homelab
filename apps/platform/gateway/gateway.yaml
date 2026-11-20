@@ -1,16 +1,11 @@
-# The one gateway of the cluster, on a fixed load balancer address.
-# - `tunnel` (port 80) is the only listener the cloudflared tunnel targets; a route attaches to it only from a namespace
-#   labelled homelab.io/public=true, so a route without sectionName in any other namespace never reaches it.
-# - `lan` (port 443) serves *.lan.chill-town.de with the wildcard certificate; routes for LAN-only names attach to it
-#   with `sectionName: lan`.
+# The LAN gateway of the cluster, on a fixed load balancer address: one listener, `lan` (port 443), serves *.lan.chill-town.de
+# with the wildcard certificate; routes for LAN-only names attach to it with `sectionName: lan`. The public routes attach to the
+# tunnel gateway (`homelab-tunnel`).
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: homelab
   namespace: gateway
-  annotations:
-    # the target of the public records external-dns publishes for opted-in routes (never the LB address)
-    external-dns.kubernetes.io/target: 12556e89-5228-476b-8513-086a399abfba.cfargotunnel.com
 spec:
   gatewayClassName: cilium
   addresses:
@@ -20,15 +15,6 @@ spec:
     annotations:
       io.cilium/lb-ipam-ips: 192.168.1.3
   listeners:
-    - name: tunnel
-      protocol: HTTP
-      port: 80
-      allowedRoutes:
-        namespaces:
-          from: Selector
-          selector:
-            matchLabels:
-              homelab.io/public: "true"
     - name: lan
       protocol: HTTPS
       port: 443
