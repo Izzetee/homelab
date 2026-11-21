@@ -68,7 +68,7 @@ jobs:
       - name: Workflow hygiene
         run: ci/check-workflows.sh
       - name: Renovate config
-        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator ghcr.io/renovatebot/renovate:44.227.4@sha256:fe058db9710840a4821f20190b3769e3ce709a049b8640aa2bf5f044969fe702 --strict renovate.json
+        run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator ghcr.io/renovatebot/renovate:44.257.6@sha256:6a036e222c8b172734be034d22d3df96d73a4e701a38bd14ea1bb97887705e75 --strict renovate.json
 
   kubernetes:
     name: kubernetes
