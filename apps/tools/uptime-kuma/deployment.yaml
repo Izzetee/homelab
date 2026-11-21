@@ -40,7 +40,7 @@ spec:
             value: "0 2147483647"
       initContainers:
         - name: ping-copy
-          image: docker.io/louislam/uptime-kuma:2.5.9@sha256:e88415a90dd2f7efecdbc18de0490aff292764a3ac471531bf1d0481725591bd
+          image: docker.io/louislam/uptime-kuma:2.5.12@sha256:8e4b6bef96417ec98a35dc103c99cc64fc229a01e584e56d95d9004d2003c02a
           command: ["cp", "/usr/bin/ping", "/ping/ping"]
           resources:
             requests:
@@ -59,7 +59,7 @@ spec:
               mountPath: /ping
       containers:
         - name: uptime-kuma
-          image: docker.io/louislam/uptime-kuma:2.5.9@sha256:e88415a90dd2f7efecdbc18de0490aff292764a3ac471531bf1d0481725591bd
+          image: docker.io/louislam/uptime-kuma:2.5.12@sha256:8e4b6bef96417ec98a35dc103c99cc64fc229a01e584e56d95d9004d2003c02a
           env:
             - name: PATH
               value: /ping:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
