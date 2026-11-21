@@ -13,6 +13,7 @@ configMapGenerator:
       - blueprints/argocd.yaml
       - blueprints/deactivate-akadmin.yaml
       - blueprints/grafana.yaml
+      - blueprints/hubble-ui.yaml
       - blueprints/openbao.yaml
       - blueprints/openbao-ui.yaml
       - blueprints/outline.yaml
