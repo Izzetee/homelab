@@ -18,6 +18,12 @@ alloy:
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
 
+        // the pod of a CloudNativePG database import copies table rows and may log them: it is never read
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_cnpg_io_jobRole"]
+          regex         = "import"
+          action        = "drop"
+        }
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
           target_label  = "namespace"
