@@ -1,6 +1,6 @@
-# Nightly dump of the database with pg_dump -Fc into the backup volume, files private (umask 077), the 14 newest kept. The password is
-# read from the Secret the operator generates, through the environment (never an argument). fsGroupChangePolicy keeps later pod mounts
-# from widening the mode of older files.
+# Nightly dump of the database with pg_dump -Fc into the backup volume, files private (umask 077). The scheduled run keeps the 14 newest sets;
+# a manual run (pod name contains -manual-) keeps all. The password is read from the Secret the operator generates, through the environment
+# (never an argument). fsGroupChangePolicy keeps later pod mounts from widening the mode of older files.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -46,8 +46,13 @@ spec:
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   pg_dump -Fc -h authentik-db-r -U authentik -d authentik -f "/backup/authentik-$stamp.dump"
                   (cd /backup && sha256sum "authentik-$stamp.dump" >"authentik-$stamp.dump.sha256")
+                  printf %s "authentik-$stamp" >/dev/termination-log
                   cd /backup
-                  ls -1 authentik-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
+                  # a manual run (pod name contains -manual-) never removes an older set
+                  case "$(cat /etc/hostname)" in
+                    *-manual-*) ;;
+                    *) ls -1 authentik-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done ;;
+                  esac
                   echo "dump authentik-$stamp.dump written"
               env:
                 - name: PGPASSWORD

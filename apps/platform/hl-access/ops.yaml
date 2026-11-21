@@ -1,0 +1,90 @@
+# Cluster-wide operating rights of the short-lived admin hl-admin-jit (jit-admin.yaml), used only through tokens of at most one hour:
+# read and delete pods, read their logs, restart workloads (patch; limited to the restart annotation by the policy below), and start a Job
+# from a CronJob (create; limited to an unaltered copy of a backup CronJob by operator-policy.yaml, outside the six application namespaces).
+# No Secret API access, no exec outside the six application namespaces, no RBAC, admission, CRD, Namespace, volume or Service writes,
+# no Deployment, DaemonSet or StatefulSet create, delete or scale.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hl-ops
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create"]
+---
+# The only change this identity may make to a Deployment, DaemonSet or StatefulSet: the restart annotation of the pod template (what
+# kubectl rollout restart patches). Everything else, including replicas and the pod template itself, must stay equal to the stored object.
+# Requests of every other user are never evaluated.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hl-ops-restart-only
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["deployments", "daemonsets", "statefulsets"]
+  matchConditions:
+    - name: jit-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit'"
+  variables:
+    - name: newTpl
+      expression: "dyn(object.spec.template)"
+    - name: oldTpl
+      expression: "dyn(oldObject.spec.template)"
+    - name: newAnn
+      expression: "variables.newTpl.?metadata.?annotations.orValue({})"
+    - name: oldAnn
+      expression: "variables.oldTpl.?metadata.?annotations.orValue({})"
+    - name: newTplMeta
+      expression: "variables.newTpl.?metadata.orValue({})"
+    - name: oldTplMeta
+      expression: "variables.oldTpl.?metadata.orValue({})"
+  validations:
+    - expression: >-
+        dyn(object.spec).all(k, k == 'template' || (k in dyn(oldObject.spec) && dyn(object.spec)[k] == dyn(oldObject.spec)[k])) &&
+        dyn(oldObject.spec).all(k, k in dyn(object.spec))
+      message: "only the restart annotation of the pod template may change (spec)"
+    - expression: "dyn(object.spec.template.spec) == dyn(oldObject.spec.template.spec)"
+      message: "only the restart annotation of the pod template may change (pod spec)"
+    - expression: >-
+        variables.newTplMeta.all(k, k == 'annotations' || (k in variables.oldTplMeta && variables.newTplMeta[k] == variables.oldTplMeta[k])) &&
+        variables.oldTplMeta.all(k, k == 'annotations' || k in variables.newTplMeta)
+      message: "only the restart annotation of the pod template may change (pod template metadata)"
+    - expression: >-
+        variables.newAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || (k in variables.oldAnn && variables.newAnn[k] == variables.oldAnn[k])) &&
+        variables.oldAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || k in variables.newAnn)
+      message: "only the restart annotation of the pod template may change (annotations)"
+    - expression: >-
+        object.metadata.?labels.orValue({}) == oldObject.metadata.?labels.orValue({}) &&
+        object.metadata.?annotations.orValue({}) == oldObject.metadata.?annotations.orValue({}) &&
+        object.metadata.?ownerReferences.orValue([]) == oldObject.metadata.?ownerReferences.orValue([]) &&
+        object.metadata.?finalizers.orValue([]) == oldObject.metadata.?finalizers.orValue([])
+      message: "only the restart annotation of the pod template may change (metadata)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-ops-restart-only
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-ops-restart-only
+  validationActions: ["Deny"]
