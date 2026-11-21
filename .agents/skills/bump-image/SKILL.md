@@ -15,7 +15,7 @@ description: Update an image version, from a Renovate pull request or by hand, k
 
 ## Who merges
 
-- A Renovate pull request (section above) or a manual bump **inside `apps/tools/<app>/`**: you, with `homelab-door merge <n>`.
+- A Renovate pull request (section above) or a manual bump **inside `apps/tools/<app>/`**: you, with `homelab-door merge <n> --expect-head <reviewed sha>` where the door takes an expected head; a door without it is not used for a merge: hand the owner `gh pr merge <n> --rebase --match-head-commit <reviewed sha>`.
 - Chart pins in `apps/_argocd/`, `apps/platform/`, `apps/identity/`, `apps/observability/`, Ansible collections, OpenTofu providers, GitHub Actions pins: prepare it, the owner merges.
 
 ## Renovate merges and reverts
@@ -38,7 +38,7 @@ Renovate opens a pull request in its Saturday window (00:00–05:59 Europe/Berli
 3. **Rebase on request.** A Renovate pull request that is behind `main` is rebased by Renovate when you add the label `rebase`: `homelab-bao run github -- gh pr edit <n> --add-label rebase`. Read it first: `gh api repos/Izzetee/homelab/pulls/<n> --jq '[.user.login, .user.type, .state, .head.ref] | @tsv'` must print `renovate[bot] Bot open renovate/…`. Wait for the label to disappear and for `ci-ok` on the new head, then merge. Add no other label and remove none; the `needs-user` label belongs to the owner's guardrail gate. Never push to a `renovate/*` branch.
 4. **Majors and holds.** A major update appears only after the owner's tick on the dashboard. Holds (n8n 3.x, runner labels, the Authentik release path) live as described rules in `renovate.json`, which the owner changes.
 5. **Charts.** A chart bump also moves the images its values file pins; read the values file for pins Renovate does not see (an image pinned without `repository`) and update them in the same pull request.
-6. **Merge.** Inside one existing `apps/tools/<app>/` the door merges a pull request opened by `renovate[bot]` (GitHub-verified commits only); every other path is the owner's.
+6. **Merge.** Inside one existing `apps/tools/<app>/` the door may merge a pull request opened by `renovate[bot]` (GitHub-verified commits only), bound to the reviewed head as in "Who merges"; every other path is the owner's.
 
 ## Rollback
 

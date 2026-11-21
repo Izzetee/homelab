@@ -2,13 +2,15 @@
 # Newest-release check for new dependencies (read-only, no token, no secret).
 #   ci/check-newest.sh <base-ref> [<head-ref>]   head defaults to HEAD
 #   ci/check-newest.sh --filter new <base-extract.json> <head-extract.json> <new.json>
-#   ci/check-newest.sh --filter result <new.json> <lookup.json>
+#   ci/check-newest.sh --filter digests <new.json> <lookup.json>          refs (name:tag) of digest pins that need registry evidence
+#   ci/check-newest.sh --filter result <new.json> <lookup.json> [<digests.json>]
 # The first form extracts the dependencies of both trees with the Renovate image of the `lint` job (no network), and only when the
 # head adds dependencies looks them up against the newest stable upstream release, ignoring this repository's holds, release-age wait
 # and dashboard approvals (a rule appended in a temporary copy of the head tree only). Output, one line each:
-#   OK newest <file> <dep> <current>            positive lookup, no newer release
+#   OK newest <file> <dep> <current>            positive lookup, no newer release (a digest pin also needs its tag's digest read from the registry)
 #   FAIL newest <file> <dep> <current> -> <newest> <type>
-#   WARN newest <file> <dep> lookup|unresolved  lookup warning, skipped, disabled or inconclusive (needs a manual lookup)
+#   WARN newest <file> <dep> lookup|unresolved|digest  lookup warning or report failure, skipped, disabled, inconclusive or digest not
+#                                               confirmed (needs a manual lookup)
 #   SKIP newest no new dependencies
 #   RESULT newest new=<n> fail=<f> warn=<w>     exit 1 on any FAIL or WARN
 # CONTAINER=podman runs the same image with podman. Names and versions printed are sanitised; no value ever leaves the script.
@@ -60,7 +62,30 @@ def positive(d):
     return bool(d.get("registryUrl")) and d.get("currentVersion") is not None and not d.get("skipReason") and not d.get("warnings")
 
 
-def cmd_result(newf, lookup):
+def digest_pin(d):
+    return d.get("datasource") == "docker" and str(d.get("currentDigest") or "").startswith("sha256:")
+
+
+def candidate(d):
+    return positive(d) and not [u for u in d.get("updates") or [] if isinstance(u, dict)]
+
+
+def cmd_digests(newf, lookup):
+    """name:tag refs of the new digest pins that would be OK: the registry must confirm that the tag still points at the pinned digest"""
+    with open(newf, encoding="utf-8") as fh:
+        new = [tuple(k) for k in json.load(fh)]
+    found = deps(lookup)
+    refs = []
+    for k in new:
+        for d in found.get(k) or []:
+            ref = f"{d['depName']}:{d.get('currentValue') or ''}"
+            if digest_pin(d) and candidate(d) and re.fullmatch(r"[a-z0-9][a-z0-9./_-]*:[A-Za-z0-9_][A-Za-z0-9._-]*", ref) and ref not in refs:
+                refs.append(ref)
+    print("\n".join(refs))
+    return 0
+
+
+def cmd_result(newf, lookup, digests=None):
     with open(newf, encoding="utf-8") as fh:
         new = [tuple(k) for k in json.load(fh)]
     with open(lookup, encoding="utf-8") as fh:
@@ -68,6 +93,10 @@ def cmd_result(newf, lookup):
     # a lookup that failed for the whole repository is no answer for any dependency
     problems = len((rep.get("problems") or []))
     found = deps(lookup)
+    confirmed = {}
+    if digests:
+        with open(digests, encoding="utf-8") as fh:
+            confirmed = json.load(fh)
     lines, nfail, nwarn = [], 0, 0
 
     def add(kind, text):
@@ -96,6 +125,10 @@ def cmd_result(newf, lookup):
                 for u in ups:
                     newest = safe(u.get("newValue") or u.get("newVersion") or u.get("newDigest") or "?")
                     add("FAIL", f"{sf} {sn} {cur} -> {newest} {safe(u.get('updateType') or '?')}")
+            elif positive(d) and problems:
+                add("WARN", f"{sf} {sn} lookup")  # a report that failed as a whole proves nothing for a single pin
+            elif positive(d) and digest_pin(d) and confirmed.get(f"{d['depName']}:{d.get('currentValue') or ''}") != d.get("currentDigest"):
+                add("WARN", f"{sf} {sn} digest")
             elif positive(d):
                 add("OK", f"{sf} {sn} {cur}")
             else:
@@ -110,7 +143,9 @@ def cmd_result(newf, lookup):
 a = sys.argv[1:]
 if a[:1] == ["new"] and len(a) == 4:
     sys.exit(cmd_new(*a[1:]))
-if a[:1] == ["result"] and len(a) == 3:
+if a[:1] == ["digests"] and len(a) == 3:
+    sys.exit(cmd_digests(*a[1:]))
+if a[:1] == ["result"] and len(a) in (3, 4):
     sys.exit(cmd_result(*a[1:]))
 print("FAIL newest filter usage")
 sys.exit(2)
@@ -160,4 +195,16 @@ cp -R "$tmp/head/." "$tmp/lookup/"
 jq '.packageRules = ((.packageRules // []) + [{matchPackageNames: ["*"], allowedVersions: "/.*/", minimumReleaseAge: null, dependencyDashboardApproval: false}])' \
   "$tmp/head/renovate.json" >"$tmp/lookup/renovate.json"
 run_renovate lookup default "$tmp/lookup" lookup
-"$0" --filter result "$tmp/new.json" "$tmp/out/lookup.json"
+
+# a digest pin is OK only when the registry still maps its tag to the pinned digest (the report has no digest evidence of its own)
+resolve_digest() { # resolve_digest <name:tag>: prints the digest or nothing; DIGEST_CMD overrides (tests, podman)
+  if [[ -n ${DIGEST_CMD:-} ]]; then "$DIGEST_CMD" "$1" 2>/dev/null || true; else docker buildx imagetools inspect "$1" 2>/dev/null | awk '/^Digest:/ {print $2; exit}' || true; fi
+}
+"$0" --filter digests "$tmp/new.json" "$tmp/out/lookup.json" >"$tmp/refs.txt"
+: >"$tmp/digests.tsv"
+while IFS= read -r ref; do
+  [[ -n $ref ]] || continue
+  printf '%s\t%s\n' "$ref" "$(resolve_digest "$ref")" >>"$tmp/digests.tsv"
+done <"$tmp/refs.txt"
+jq -Rn '[inputs | split("\t") | select(length == 2) | {(.[0]): .[1]}] | add // {}' "$tmp/digests.tsv" >"$tmp/digests.json"
+"$0" --filter result "$tmp/new.json" "$tmp/out/lookup.json" "$tmp/digests.json"
