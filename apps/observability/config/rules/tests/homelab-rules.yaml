@@ -244,6 +244,70 @@ tests:
       - eval_time: 90m
         alertname: HomelabArgoAppOutOfSync
         exp_alerts: []
+  # failed or stuck sync: the last operation failed, or the sync status stays Unknown (15 minutes)
+  - name: sync operation failed
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_operation_phase{name="cert-manager",project="platform",operation_phase="Failed"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoSyncFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, name: cert-manager, project: platform, operation_phase: Failed}
+            exp_annotations: &syncfailed_ann
+              summary: "Application cert-manager: the last sync failed or its sync status is unknown"
+              runbook: "Read the operation message of the Application; revert the pull request that changed it, or fix forward."
+  - name: sync operation errored
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_operation_phase{name="cert-manager",project="platform",operation_phase="Error"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoSyncFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, name: cert-manager, project: platform, operation_phase: Error}
+            exp_annotations: *syncfailed_ann
+  - name: sync status unknown
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_sync_status{name="cert-manager",project="platform",sync_status="Unknown"}'
+        values: '1+0x40'
+      - series: 'homelab_argocd_app_operation_phase{name="cert-manager",project="platform",operation_phase="Succeeded"}'
+        values: '1+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoSyncFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, name: cert-manager, project: platform, sync_status: Unknown}
+            exp_annotations: *syncfailed_ann
+  - name: sync failed for less than 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_operation_phase{name="cert-manager",project="platform",operation_phase="Failed"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HomelabArgoSyncFailed
+        exp_alerts: []
+  - name: sync succeeded, running and synced are quiet
+    interval: 1m
+    input_series:
+      - series: 'homelab_argocd_app_operation_phase{name="a",project="platform",operation_phase="Succeeded"}'
+        values: '1+0x40'
+      - series: 'homelab_argocd_app_operation_phase{name="b",project="platform",operation_phase="Running"}'
+        values: '1+0x40'
+      - series: 'homelab_argocd_app_operation_phase{name="a",project="platform",operation_phase="Failed"}'
+        values: '0+0x40'
+      - series: 'homelab_argocd_app_sync_status{name="a",project="platform",sync_status="Synced"}'
+        values: '1+0x40'
+      - series: 'homelab_argocd_app_sync_status{name="a",project="platform",sync_status="Unknown"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HomelabArgoSyncFailed
+        exp_alerts: []
   # backup jobs: last success older than 26 hours (the series value is a timestamp; the test clock starts at 0)
   - name: backup too old
     interval: 1m
