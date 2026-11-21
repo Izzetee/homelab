@@ -10,7 +10,10 @@ One pull request, merged by the owner (a new application is never agent-merged).
 ## Steps
 
 1. **Image**: `name:tag@sha256:<digest>` and both platforms (`docker buildx imagetools inspect`). A single-architecture image needs a
-   `kubernetes.io/arch` node selector and a one-line reason in the manifest.
+   `kubernetes.io/arch` node selector and a one-line reason in the manifest. **Version:** the newest stable release (no beta, next, release
+   candidate or early-access line) unless the owner names a version; a chart pin follows the same rule. Run `ci/check-newest.sh origin/main`
+   on the committed branch: every new pin needs its own `OK newest` line. A `FAIL`, a `WARN` or no line for a pin (Renovate does not read every
+   pin) needs a recorded manual lookup (registry or chart index: newest stable and its date) or the owner's named version; say which in the PR.
 2. **Namespace** in `networking/namespaces.yaml` with the label `pod-security.kubernetes.io/enforce: restricted`. No `homelab.io/public` label: the
    owner adds it together with an Access application (step 8).
 3. **AppProject**: add the namespace as a destination of project `apps` (no secrets) or `apps-store` (reads secrets from the store) in

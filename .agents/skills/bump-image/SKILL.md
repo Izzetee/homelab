@@ -18,6 +18,17 @@ description: Update an image version, from a Renovate pull request or by hand, k
 - A Renovate pull request (section above) or a manual bump **inside `apps/tools/<app>/`**: you, with `homelab-door merge <n>`.
 - Chart pins in `apps/_argocd/`, `apps/platform/`, `apps/identity/`, `apps/observability/`, Ansible collections, OpenTofu providers, GitHub Actions pins: prepare it, the owner merges.
 
+## Renovate merges and reverts
+
+- **Automatic classes.** Renovate merges a pull request itself only when a `packageRules` entry of `renovate.json` with `automerge: true` matches it:
+  Saturday daytime, after `ci-ok` and a release age of three days with a release timestamp. Read the rules before assuming a pull request is not
+  merged for you: `jq '.packageRules[] | select(.automerge == true) | .description' renovate.json`. A floating tag or a tag without full SemVer never
+  merges by itself.
+- **Batch and revert.** Pull requests the owner approved in one list, each with its reviewed head, and a revert the owner asked for, are merged
+  by exactly that list, bound to that head (`--expect-head`, else the owner's `gh pr merge --match-head-commit`). A head that moved is not merged.
+- **Revert of an automatic dependency.** The revert pull request also appends `{"matchPackageNames": ["<dependency>"], "automerge": false}` to
+  `renovate.json` directly after the rule for floating tags, so the reverted version cannot merge again by itself; the owner lifts it later.
+
 ## Renovate pull requests
 
 Renovate opens a pull request in its Saturday window (00:00–05:59 Europe/Berlin) and rebases it only when it conflicts with `main` or when you ask. Start from the dependency dashboard (issue "Dependency Dashboard"), not from the pull request list.

@@ -1,0 +1,259 @@
+{
+  "repositories": {
+    "local": {
+      "packageFiles": {
+        "argocd": [
+          {
+            "deps": [
+              {
+                "depName": "alloy",
+                "registryUrls": [
+                  "https://grafana.github.io/helm-charts"
+                ],
+                "currentValue": "1.16.0",
+                "datasource": "helm",
+                "packageName": "alloy",
+                "updates": [],
+                "versioning": "helm",
+                "warnings": [],
+                "sourceUrl": "https://github.com/grafana/helm-charts",
+                "registryUrl": "https://grafana.github.io/helm-charts",
+                "mostRecentTimestamp": "2026-11-13T15:10:48.469Z",
+                "currentVersion": "1.16.0",
+                "currentVersionTimestamp": "2026-11-13T15:10:48.469Z",
+                "currentVersionAgeInDays": 7,
+                "fixedVersion": "1.16.0"
+              },
+              {
+                "depName": "https://github.com/Izzetee/homelab.git",
+                "currentValue": "main",
+                "datasource": "git-tags",
+                "packageName": "https://github.com/Izzetee/homelab.git",
+                "updates": [],
+                "versioning": "semver-coerced",
+                "warnings": [],
+                "skipReason": "invalid-value"
+              }
+            ],
+            "packageFile": "apps/_argocd/alloy.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "https://github.com/Izzetee/homelab.git",
+                "currentValue": "main",
+                "datasource": "git-tags",
+                "packageName": "https://github.com/Izzetee/homelab.git",
+                "updates": [],
+                "versioning": "semver-coerced",
+                "warnings": [],
+                "skipReason": "invalid-value"
+              },
+              {
+                "depName": "kube-prometheus-stack",
+                "registryUrls": [
+                  "https://prometheus-community.github.io/helm-charts"
+                ],
+                "currentValue": "93.4.0",
+                "datasource": "helm",
+                "packageName": "kube-prometheus-stack",
+                "updates": [
+                  {
+                    "bucket": "non-major",
+                    "newVersion": "93.6.1",
+                    "newValue": "93.6.1",
+                    "newDigest": "6e2a81882b4883858470952b0a02366aac906dc253bf1057360f82526597fde4",
+                    "releaseTimestamp": "2026-11-21T03:08:53.216Z",
+                    "newVersionAgeInDays": 0,
+                    "newMajor": 93,
+                    "newMinor": 6,
+                    "newPatch": 1,
+                    "updateType": "minor",
+                    "isBreaking": false,
+                    "libYears": 0.008717548230593607,
+                    "branchName": "renovate/kube-prometheus-stack-93.x"
+                  }
+                ],
+                "versioning": "helm",
+                "warnings": [],
+                "sourceUrl": "https://github.com/prometheus-community/helm-charts",
+                "registryUrl": "https://prometheus-community.github.io/helm-charts",
+                "homepage": "https://github.com/prometheus-operator/kube-prometheus",
+                "mostRecentTimestamp": "2026-11-21T03:08:53.216Z",
+                "currentVersion": "93.4.0",
+                "currentVersionTimestamp": "2026-11-17T22:46:56.615Z",
+                "currentVersionAgeInDays": 3,
+                "isSingleVersion": true,
+                "fixedVersion": "93.4.0"
+              }
+            ],
+            "packageFile": "apps/_argocd/kube-prometheus-stack.yaml"
+          }
+        ],
+        "github-actions": [
+          {
+            "deps": [
+              {
+                "depName": "actions/checkout",
+                "commitMessageTopic": "{{{depName}}} action",
+                "versioning": "github-actions",
+                "depType": "action",
+                "replaceString": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+                "autoReplaceStringTemplate": "{{depName}}@{{#if newDigest}}{{newDigest}}{{#if newValue}} # {{newValue}}{{/if}}{{/if}}{{#unless newDigest}}{{newValue}}{{/unless}}",
+                "currentValue": "v7.0.1",
+                "currentDigest": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "datasource": "github-tags",
+                "packageName": "actions/checkout",
+                "skipReason": "github-token-required",
+                "updates": []
+              },
+              {
+                "depName": "ubuntu",
+                "currentValue": "24.04",
+                "replaceString": "ubuntu-24.04",
+                "depType": "github-runner",
+                "datasource": "github-runners",
+                "autoReplaceStringTemplate": "{{depName}}-{{newValue}}",
+                "packageName": "ubuntu",
+                "updates": [],
+                "skipReason": "disabled"
+              }
+            ],
+            "packageFile": ".github/workflows/ci.yml"
+          }
+        ],
+        "kubernetes": [
+          {
+            "deps": [
+              {
+                "depName": "CronJob",
+                "currentValue": "batch/v1",
+                "datasource": "kubernetes-api",
+                "versioning": "kubernetes-api",
+                "packageName": "CronJob",
+                "updates": [],
+                "warnings": [],
+                "currentVersion": "batch/v1",
+                "fixedVersion": "batch/v1"
+              }
+            ],
+            "packageFile": "apps/identity/authentik-db/pg-dump.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/cloudflare/cloudflared",
+                "packageName": "docker.io/cloudflare/cloudflared",
+                "currentValue": "2026.11.1",
+                "currentDigest": "sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d",
+                "replaceString": "docker.io/cloudflare/cloudflared:2026.11.1@sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker",
+                "updates": [],
+                "versioning": "docker",
+                "warnings": [],
+                "sourceUrl": "https://github.com/cloudflare/cloudflared",
+                "registryUrl": "https://index.docker.io",
+                "lookupName": "cloudflare/cloudflared",
+                "currentVersion": "2026.11.1",
+                "fixedVersion": "2026.11.1"
+              }
+            ],
+            "packageFile": "apps/platform/cloudflared/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/excalidraw/excalidraw",
+                "packageName": "docker.io/excalidraw/excalidraw",
+                "currentValue": "latest",
+                "currentDigest": "sha256:f7ee194addd607bf831d2af0f0a34463dd4225e426cf35199ef0b12a803398e9",
+                "replaceString": "docker.io/excalidraw/excalidraw:latest@sha256:f7ee194addd607bf831d2af0f0a34463dd4225e426cf35199ef0b12a803398e9",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker",
+                "updates": [],
+                "versioning": "docker",
+                "warnings": []
+              }
+            ],
+            "packageFile": "apps/tools/excalidraw/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/n8nio/n8n",
+                "packageName": "docker.io/n8nio/n8n",
+                "currentValue": "2.48.7",
+                "currentDigest": "sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861",
+                "replaceString": "docker.io/n8nio/n8n:2.48.7@sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker",
+                "updates": [
+                  {
+                    "bucket": "v2.49",
+                    "newVersion": "2.49.3",
+                    "newValue": "2.49.3",
+                    "newMajor": 2,
+                    "newMinor": 49,
+                    "newPatch": 3,
+                    "updateType": "minor",
+                    "isBreaking": false,
+                    "newDigest": "sha256:69f3d3694b42992d7cce232b7ba46f22205e39d5eb61bd235588e4d5d111d8c4",
+                    "branchName": "renovate/docker.io-n8nio-n8n-2.49.x"
+                  },
+                  {
+                    "bucket": "major",
+                    "newVersion": "3.3.0",
+                    "newValue": "3.3.0",
+                    "newMajor": 3,
+                    "newMinor": 3,
+                    "newPatch": 0,
+                    "updateType": "major",
+                    "isBreaking": true,
+                    "newDigest": "sha256:e06707c78ef5adb302b47909f8fee5caf8d389a7e5f3f0e03165214f6178565e",
+                    "branchName": "renovate/docker.io-n8nio-n8n-3.3.x"
+                  }
+                ],
+                "versioning": "docker",
+                "warnings": [],
+                "sourceUrl": "https://github.com/n8n-io/n8n",
+                "registryUrl": "https://index.docker.io",
+                "homepage": "https://n8n.io",
+                "lookupName": "n8nio/n8n",
+                "currentVersion": "2.48.7",
+                "isSingleVersion": true,
+                "fixedVersion": "2.48.7"
+              }
+            ],
+            "packageFile": "apps/tools/n8n/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "ghcr.io/open-webui/open-terminal",
+                "packageName": "ghcr.io/open-webui/open-terminal",
+                "currentValue": "latest",
+                "currentDigest": "sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11",
+                "replaceString": "ghcr.io/open-webui/open-terminal:latest@sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker",
+                "updates": [
+                  {
+                    "updateType": "digest",
+                    "newValue": "latest",
+                    "newDigest": "sha256:3b62a6ba155e8315af331af5c3d9d5cbc16c73ff0f4d57f19221233d6341f0b3",
+                    "branchName": "renovate/ghcr.io-open-webui-open-terminal-latest"
+                  }
+                ],
+                "versioning": "docker",
+                "warnings": []
+              }
+            ],
+            "packageFile": "apps/tools/open-webui/terminals.yaml"
+          }
+        ]
+      }
+    }
+  },
+  "problems": []
+}

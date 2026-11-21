@@ -1,0 +1,150 @@
+{
+  "repositories": {
+    "local": {
+      "packageFiles": {
+        "argocd": [
+          {
+            "deps": [
+              {
+                "depName": "alloy",
+                "registryUrls": [
+                  "https://grafana.github.io/helm-charts"
+                ],
+                "currentValue": "1.16.0",
+                "datasource": "helm",
+                "packageName": "alloy"
+              },
+              {
+                "depName": "https://github.com/Izzetee/homelab.git",
+                "currentValue": "main",
+                "datasource": "git-tags",
+                "packageName": "https://github.com/Izzetee/homelab.git"
+              }
+            ],
+            "packageFile": "apps/_argocd/alloy.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "https://github.com/Izzetee/homelab.git",
+                "currentValue": "main",
+                "datasource": "git-tags",
+                "packageName": "https://github.com/Izzetee/homelab.git"
+              },
+              {
+                "depName": "kube-prometheus-stack",
+                "registryUrls": [
+                  "https://prometheus-community.github.io/helm-charts"
+                ],
+                "currentValue": "93.4.0",
+                "datasource": "helm",
+                "packageName": "kube-prometheus-stack"
+              }
+            ],
+            "packageFile": "apps/_argocd/kube-prometheus-stack.yaml"
+          }
+        ],
+        "github-actions": [
+          {
+            "deps": [
+              {
+                "depName": "actions/checkout",
+                "commitMessageTopic": "{{{depName}}} action",
+                "versioning": "github-actions",
+                "depType": "action",
+                "replaceString": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+                "autoReplaceStringTemplate": "{{depName}}@{{#if newDigest}}{{newDigest}}{{#if newValue}} # {{newValue}}{{/if}}{{/if}}{{#unless newDigest}}{{newValue}}{{/unless}}",
+                "currentValue": "v7.0.1",
+                "currentDigest": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "datasource": "github-tags",
+                "packageName": "actions/checkout",
+                "skipReason": "github-token-required"
+              },
+              {
+                "depName": "ubuntu",
+                "currentValue": "24.04",
+                "replaceString": "ubuntu-24.04",
+                "depType": "github-runner",
+                "datasource": "github-runners",
+                "autoReplaceStringTemplate": "{{depName}}-{{newValue}}",
+                "packageName": "ubuntu"
+              }
+            ],
+            "packageFile": ".github/workflows/ci.yml"
+          }
+        ],
+        "kubernetes": [
+          {
+            "deps": [
+              {
+                "depName": "CronJob",
+                "currentValue": "batch/v1",
+                "datasource": "kubernetes-api",
+                "versioning": "kubernetes-api",
+                "packageName": "CronJob"
+              }
+            ],
+            "packageFile": "apps/identity/authentik-db/pg-dump.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/cloudflare/cloudflared",
+                "packageName": "docker.io/cloudflare/cloudflared",
+                "currentValue": "2026.11.1",
+                "currentDigest": "sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d",
+                "replaceString": "docker.io/cloudflare/cloudflared:2026.11.1@sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker"
+              }
+            ],
+            "packageFile": "apps/platform/cloudflared/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/excalidraw/excalidraw",
+                "packageName": "docker.io/excalidraw/excalidraw",
+                "currentValue": "latest",
+                "currentDigest": "sha256:f7ee194addd607bf831d2af0f0a34463dd4225e426cf35199ef0b12a803398e9",
+                "replaceString": "docker.io/excalidraw/excalidraw:latest@sha256:f7ee194addd607bf831d2af0f0a34463dd4225e426cf35199ef0b12a803398e9",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker"
+              }
+            ],
+            "packageFile": "apps/tools/excalidraw/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "docker.io/n8nio/n8n",
+                "packageName": "docker.io/n8nio/n8n",
+                "currentValue": "2.48.7",
+                "currentDigest": "sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861",
+                "replaceString": "docker.io/n8nio/n8n:2.48.7@sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker"
+              }
+            ],
+            "packageFile": "apps/tools/n8n/deployment.yaml"
+          },
+          {
+            "deps": [
+              {
+                "depName": "ghcr.io/open-webui/open-terminal",
+                "packageName": "ghcr.io/open-webui/open-terminal",
+                "currentValue": "latest",
+                "currentDigest": "sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11",
+                "replaceString": "ghcr.io/open-webui/open-terminal:latest@sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11",
+                "autoReplaceStringTemplate": "{{depName}}{{#if newValue}}:{{newValue}}{{/if}}{{#if newDigest}}@{{newDigest}}{{/if}}",
+                "datasource": "docker"
+              }
+            ],
+            "packageFile": "apps/tools/open-webui/terminals.yaml"
+          }
+        ]
+      }
+    }
+  },
+  "problems": []
+}
