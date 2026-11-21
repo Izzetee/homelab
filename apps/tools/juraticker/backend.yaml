@@ -8,7 +8,8 @@ metadata:
     app.kubernetes.io/name: juraticker
     app.kubernetes.io/component: backend
 spec:
-  replicas: 1
+  # stopped for the PostgreSQL 18 import; restored by the switch change
+  replicas: 0
   strategy:
     type: Recreate
   selector:
