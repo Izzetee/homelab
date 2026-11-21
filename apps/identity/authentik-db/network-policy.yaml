@@ -21,6 +21,41 @@ spec:
               protocol: TCP
     - fromEndpoints:
         - matchLabels:
+            cnpg.io/cluster: authentik-db18
+            cnpg.io/jobRole: import
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: authentik-db18
+  namespace: authentik
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: authentik-db18
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: authentik
+        - matchLabels:
+            app.kubernetes.io/name: authentik-pg-dump
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
             k8s:io.kubernetes.pod.namespace: cnpg-system
       toPorts:
         - ports:

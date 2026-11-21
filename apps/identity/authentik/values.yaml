@@ -60,7 +60,8 @@ blueprints:
   configMaps:
     - authentik-blueprints
 server:
-  replicas: 1
+  # stopped for the PostgreSQL 18 import; restored by the switch change
+  replicas: 0
   serviceAccountName: authentik
   containerSecurityContext:
     allowPrivilegeEscalation: false
@@ -91,7 +92,8 @@ server:
       path: /-/health/live/
       port: http
 worker:
-  replicas: 1
+  # stopped for the PostgreSQL 18 import; restored by the switch change
+  replicas: 0
   serviceAccountName: authentik
   automountServiceAccountToken: false
   containerSecurityContext:
