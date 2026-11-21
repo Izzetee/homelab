@@ -19,6 +19,10 @@ gatewayAPI:
   enabled: true
 operator:
   replicas: 1
+  # a lease of 60 s with a 40 s renew deadline rides out etcd disk stalls of several seconds (same values as the K3s controllers)
+  extraArgs:
+    - --leader-election-lease-duration=60s
+    - --leader-election-renew-deadline=40s
   resources:
     requests:
       cpu: 50m

@@ -171,3 +171,12 @@ spec:
             severity: critical
           annotations:
             summary: "Containers on node {{ $labels.node }} cannot signal each other (AppArmor)"
+        # A start time that is newer than one hour: the K3s server (API server, controller manager, scheduler and etcd in one
+        # process) restarted. Only the newest sample is read, so a scrape gap during the restart cannot hide the change.
+        # Planned restarts fire it as well.
+        - alert: HomelabK3sServerRestarted
+          expr: time() - process_start_time_seconds{job="apiserver"} < 3600
+          labels:
+            severity: warning
+          annotations:
+            summary: "The K3s server process started less than one hour ago (planned restarts fire too)"
