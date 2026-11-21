@@ -20,6 +20,6 @@ Allowed on your own merge: every changed path lies inside `apps/tools/<app>/` of
 
 ## Rollback
 
-A revert pull request (merge with `homelab-door merge` if it stays inside the directory). For a stateful change restore from the backup of step 2 only with the owner's go.
+A revert pull request (inside the directory it is merged by the rule of step 5: `homelab-door merge <n> --expect-head <reviewed sha>` where the door takes an expected head, else the owner's `gh pr merge <n> --rebase --match-head-commit <reviewed sha>`). For a stateful change restore from the backup of step 2 only with the owner's go.
 
-Then the changelog entry (skill `wiki-changelog`); `homelab-door merge` prints `NEXT changelog homelab#<n>`.
+Then the changelog entry (skill `wiki-changelog`); a door merge prints `NEXT changelog homelab#<n>`.
