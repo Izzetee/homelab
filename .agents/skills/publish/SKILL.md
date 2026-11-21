@@ -13,7 +13,7 @@ description: Publish a change: install and check the door, dry-run, push, open a
 - `homelab-door --dry-run <branch>`: every check on the range, nothing pushed. Fix every `FAIL` line.
 - `homelab-door <branch>` pushes; `--rebased` only on a pull request branch after a rebase. Never `main`.
 - `homelab-door pr <branch> <title-file> <body-file>` and `pr-edit <n> <title-file> <body-file>`: checked text only, no values, no private names.
-- `homelab-door merge <n>`: only a change inside one existing `apps/tools/<app>/` after `ci-ok`; it prints `NEXT changelog homelab#<n>`.
+- `homelab-door merge <n> --expect-head <reviewed sha>`: only a change inside one existing `apps/tools/<app>/` after `ci-ok`, only where the door takes an expected head (a door without it is not used for a merge: see the next section); it prints `NEXT changelog homelab#<n>`.
 - `homelab-door --check-tree` judges the whole tree.
 
 ## Everything else: the owner merges

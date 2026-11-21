@@ -15,7 +15,7 @@ Allowed on your own merge: every changed path lies inside `apps/tools/<app>/` of
 2. Stateful change (database, volume, schema, image with a migration): take a manual backup first (skill `backup-restore`).
 3. `kustomize build apps/tools/<app> | kubeconform -strict` and the image check.
 4. Branch, commit, `homelab-door --dry-run <branch>`, then `homelab-door <branch>`, `homelab-door pr <branch> <title-file> <body-file>`.
-5. After `ci-ok` is green: `homelab-door merge <n>`. If it prints `FAIL merge <n> owner`, the change is outside the allowlist: tell the owner and wait.
+5. After `ci-ok` is green: `homelab-door merge <n> --expect-head <reviewed sha>` where the door takes an expected head, else hand the owner `gh pr merge <n> --rebase --match-head-commit <reviewed sha>`. If it prints `FAIL merge <n> owner`, the change is outside the allowlist: tell the owner and wait.
 6. Watch ArgoCD: the Application is `Synced`/`Healthy`, `kubectl rollout status` finishes, the app answers.
 
 ## Rollback

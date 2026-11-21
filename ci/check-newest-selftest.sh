@@ -18,11 +18,14 @@ clone() {
   jq --arg m "$2" --arg d "$3" --arg f "$4" \
     '.repositories.local.packageFiles[$m] += [ .repositories.local.packageFiles[$m][] | select(any(.deps[]; .depName == $d)) | (.packageFile = $f) | (.deps |= map(select(.depName == $d))) ]' "$1" >"$5"
 }
-run() { # run <head extract> <lookup>: new + result as the script runs them; sets out, rc
+# the registry's answer for the digest pins of the fixtures: tag -> digest (what resolve_digest would print)
+DG_OK='{"docker.io/cloudflare/cloudflared:2026.11.1": "sha256:e613aadbc2d9511785d2e67a86b0c8ac18dd63a3f9af0d06faf04cbfdcb35f2d"}'
+run() { # run <head extract> <lookup> [<digests json>]: new + result as the script runs them; sets out, rc
   rc=0
+  printf '%s' "${3:-$DG_OK}" >"$tmp/dg.json"
   out=$("$CHK" --filter new "$FX/extract.json" "$1" "$tmp/new.json") || rc=$?
   if [[ -s $tmp/new.json ]]; then
-    out=$("$CHK" --filter result "$tmp/new.json" "$2") || rc=$?
+    out=$("$CHK" --filter result "$tmp/new.json" "$2" "$tmp/dg.json") || rc=$?
   fi
   rm -f "$tmp/new.json"
 }
@@ -128,6 +131,30 @@ if [[ $(wc -l <<<"$out") -eq 2 ]] && ! grep -q '^::' <<<"$out"; then ok "hostile
 jq '.problems = [{message: "x"}]' "$tmp/l.json" >"$tmp/l2.json"
 run "$tmp/h.json" "$tmp/l2.json"
 if [[ $out == *"lookup problems=1"* && $rc == 1 ]]; then ok "report problems: WARN, exit 1"; else bad "problems: rc=$rc $out"; fi
+# 16. a digest pin needs the registry's confirmation: missing or different digest is a WARN, never OK
+clone "$FX/extract.json" kubernetes docker.io/cloudflare/cloudflared apps/tools/new/i.yaml "$tmp/h.json"
+clone "$FX/lookup.json" kubernetes docker.io/cloudflare/cloudflared apps/tools/new/i.yaml "$tmp/l.json"
+run "$tmp/h.json" "$tmp/l.json" '{}'
+expect "digest pin, version resolved but no registry digest: WARN digest, exit 1" 1 "WARN newest apps/tools/new/i.yaml docker.io/cloudflare/cloudflared digest"
+run "$tmp/h.json" "$tmp/l.json" '{"docker.io/cloudflare/cloudflared:2026.11.1": "sha256:0000000000000000000000000000000000000000000000000000000000000000"}'
+expect "digest pin, registry maps the tag to another digest: WARN digest, exit 1" 1 "WARN newest apps/tools/new/i.yaml docker.io/cloudflare/cloudflared digest"
+if has "OK newest apps/tools/new/i.yaml docker.io/cloudflare/cloudflared 2026.11.1"; then bad "OK without digest evidence"; else ok "no OK line without digest evidence"; fi
+"$CHK" --filter new "$FX/extract.json" "$tmp/h.json" "$tmp/new.json" >/dev/null
+refs=$("$CHK" --filter digests "$tmp/new.json" "$tmp/l.json")
+if [[ $refs == "docker.io/cloudflare/cloudflared:2026.11.1" ]]; then ok "digests filter lists the ref the registry must confirm"; else bad "digests filter: $refs"; fi
+rm -f "$tmp/new.json"
+
+# 17. a failed report as a whole gives no OK for any pin; a listed update stays a FAIL
+jq '.problems = [{message: "x"}]' "$tmp/l.json" >"$tmp/l2.json"
+run "$tmp/h.json" "$tmp/l2.json"
+expect "report problems with a positive pin: WARN lookup for the pin, no OK, exit 1" 1 "WARN newest apps/tools/new/i.yaml docker.io/cloudflare/cloudflared lookup" "WARN newest - - lookup problems=1"
+if has "OK newest apps/tools/new/i.yaml docker.io/cloudflare/cloudflared 2026.11.1"; then bad "OK despite a failed report"; else ok "no OK line when the report failed"; fi
+clone "$FX/extract.json" argocd kube-prometheus-stack apps/_argocd/new2.yaml "$tmp/h3.json"
+clone "$FX/lookup.json" argocd kube-prometheus-stack apps/_argocd/new2.yaml "$tmp/l3.json"
+jq '.problems = [{message: "x"}]' "$tmp/l3.json" >"$tmp/l4.json"
+run "$tmp/h3.json" "$tmp/l4.json"
+expect "report problems with a listed update: still FAIL" 1 "FAIL newest apps/_argocd/new2.yaml kube-prometheus-stack 93.4.0 -> 93.6.1 minor"
+
 rc=0
 "$CHK" --filter bogus >/dev/null 2>&1 || rc=$?
 if [[ $rc == 2 ]]; then ok "unknown filter mode: exit 2"; else bad "usage rc=$rc"; fi
