@@ -83,7 +83,7 @@ spec:
             severity: warning
           annotations:
             summary: "Application {{ $labels.name }}: the last sync failed or its sync status is unknown"
-            runbook: "Read the operation message of the Application; revert the pull request that changed it, or fix forward."
+            runbook: "Read the operation message of the Application; revert the pull request that changed it (/skill:hl-run-iteration revert <pr>), or fix forward."
         - alert: HomelabBackupTooOld
           expr: |
             (time() - kube_cronjob_status_last_successful_time
