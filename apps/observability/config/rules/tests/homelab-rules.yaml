@@ -580,3 +580,29 @@ tests:
       - eval_time: 20m
         alertname: HomelabContainerSignalBlocked
         exp_alerts: []
+  # K3s server restart: old start time is silent, a new start time after a gap of missing samples fires, one hour later silent
+  - name: k3s server process start after a gap
+    interval: 1m
+    input_series:
+      - series: 'process_start_time_seconds{job="apiserver",instance="i1"}'
+        values: '100+0x119 _x10 7800+0x70'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: HomelabK3sServerRestarted
+        exp_alerts: []
+      - eval_time: 125m
+        alertname: HomelabK3sServerRestarted
+        exp_alerts: []
+      - eval_time: 131m
+        alertname: HomelabK3sServerRestarted
+        exp_alerts:
+          - exp_labels: {severity: warning, job: apiserver, instance: i1}
+            exp_annotations: {summary: "The K3s server process started less than one hour ago (planned restarts fire too)"}
+      - eval_time: 189m
+        alertname: HomelabK3sServerRestarted
+        exp_alerts:
+          - exp_labels: {severity: warning, job: apiserver, instance: i1}
+            exp_annotations: {summary: "The K3s server process started less than one hour ago (planned restarts fire too)"}
+      - eval_time: 191m
+        alertname: HomelabK3sServerRestarted
+        exp_alerts: []

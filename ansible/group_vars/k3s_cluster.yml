@@ -23,6 +23,8 @@ k3s_pause_image: docker.io/rancher/mirrored-pause:3.10.2@sha256:f548e0e8e3dc1896
 # local-path provisioner and metrics-server come from the pinned copies in ansible/files/k3s-addons
 # K3s 1.37 stages the packaged add-on gateway-api-crd unless it is disabled; the Gateway API CRDs belong to ArgoCD (apps/platform/gateway-api), so it is
 # disabled here (an unknown `disable` name is ignored by older K3s releases).
+# The controller manager, scheduler and cloud controller run inside the K3s process and a lost leader lease ends it: 60 s lease and 40 s renew
+# deadline (upstream 15 s / 10 s) ride out etcd disk stalls of several seconds. The Cilium operator gets the same in apps/platform/cilium/values.yaml.
 server_config_yaml: |
   cluster-init: true
   flannel-backend: none
@@ -45,6 +47,15 @@ server_config_yaml: |
   write-kubeconfig-mode: "0600"
   kube-apiserver-arg:
     - admission-control-config-file=/etc/rancher/k3s/psa.yaml
+  kube-controller-manager-arg:
+    - leader-elect-lease-duration=60s
+    - leader-elect-renew-deadline=40s
+  kube-scheduler-arg:
+    - leader-elect-lease-duration=60s
+    - leader-elect-renew-deadline=40s
+  kube-cloud-controller-manager-arg:
+    - leader-elect-lease-duration=60s
+    - leader-elect-renew-deadline=40s
   kubelet-arg:
     - image-gc-high-threshold=75
     - image-gc-low-threshold=65
