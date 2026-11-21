@@ -120,6 +120,11 @@
       "enabled": false
     },
     {
+      "description": "PostgreSQL operand images stay on major 18 until the CloudNativePG operator and Authentik list 19 as supported; lifted by the change that upgrades to 19",
+      "matchPackageNames": ["ghcr.io/cloudnative-pg/postgresql"],
+      "allowedVersions": "/^18\\./"
+    },
+    {
       "description": "Dummy image of a CI self-test, not a dependency",
       "matchPackageNames": ["example.test/**"],
       "enabled": false
