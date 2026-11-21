@@ -71,6 +71,19 @@ spec:
             severity: warning
           annotations:
             summary: "Application {{ $labels.name }} is out of sync"
+        # A failed sync (also a failed PreSync hook: the Application stays Healthy on the old version) or a sync status that stays Unknown
+        # (a comparison error skips the automatic sync while the last operation still reads Succeeded).
+        - alert: HomelabArgoSyncFailed
+          expr: |
+            homelab_argocd_app_operation_phase{operation_phase=~"Failed|Error"} == 1
+            or
+            homelab_argocd_app_sync_status{sync_status="Unknown"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Application {{ $labels.name }}: the last sync failed or its sync status is unknown"
+            runbook: "Read the operation message of the Application; revert the pull request that changed it, or fix forward."
         - alert: HomelabBackupTooOld
           expr: |
             (time() - kube_cronjob_status_last_successful_time

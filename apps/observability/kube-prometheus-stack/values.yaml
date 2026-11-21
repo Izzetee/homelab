@@ -304,6 +304,14 @@ kube-state-metrics:
                     labelName: sync_status
                     path: [status, sync, status]
                     list: [Synced, OutOfSync, Unknown]
+              - name: operation_phase
+                help: Phase of the last sync operation of an ArgoCD Application (1 for the current phase)
+                each:
+                  type: StateSet
+                  stateSet:
+                    labelName: operation_phase
+                    path: [status, operationState, phase]
+                    list: [Running, Terminating, Failed, Error, Succeeded]
           - groupVersionKind:
               group: k3s.cattle.io
               version: v1
