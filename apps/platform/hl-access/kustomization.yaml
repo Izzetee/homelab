@@ -8,3 +8,5 @@ resources:
   - operator-policy.yaml
   - operator-token.yaml
   - jit-admin.yaml
+  - probe.yaml
+  - ops.yaml

@@ -1,9 +1,10 @@
-# Admission guard for the ServiceAccount hl-operator (operator.yaml), in three parts:
-#  1. a MutatingAdmissionPolicy that marks every Job this ServiceAccount creates with the label homelab.io/hl-operator=true;
+# Admission guard for Jobs created by the ServiceAccount hl-operator (operator.yaml) and, outside the six application namespaces, by the
+# short-lived admin hl-admin-jit (jit-admin.yaml; inside the six it may create other Jobs), in three parts:
+#  1. a MutatingAdmissionPolicy that marks every such Job with the label homelab.io/hl-operator=true;
 #  2. a ValidatingAdmissionPolicy that admits a marked Job only when it is an unaltered manual copy (kubectl create job --from) of the
 #     named backup CronJob of the request namespace, which must carry the label homelab.io/backup=true;
-#  3. bindings: one per namespace with the CronJob as parameter (Deny when it is missing, but only for marked Jobs), one that denies this
-#     ServiceAccount in every other namespace, and one that denies it wherever the mark is missing (policy 1 absent or broken).
+#  3. bindings: one per namespace with the CronJob as parameter (Deny when it is missing, but only for marked Jobs), one that denies these
+#     identities in every other namespace, and one that denies them wherever the mark is missing (policy 1 absent or broken).
 # Requests of every other user never carry the mark and are never evaluated: a missing or renamed CronJob cannot deny anyone else's Job.
 # Object-typed values are compared with dyn() on both sides so the policy's type check stays free of warnings.
 apiVersion: admissionregistration.k8s.io/v1
@@ -24,8 +25,11 @@ spec:
         operations: ["CREATE"]
         resources: ["jobs"]
   matchConditions:
-    - name: operator-only
-      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator'"
+    - name: guarded-identities
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator' ||
+        (request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit' &&
+        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'uptime-kuma', 'wiki']))
   variables:
     - name: tpl
       expression: "params.spec.jobTemplate"
@@ -120,7 +124,7 @@ spec:
         object.metadata.?finalizers.orValue([]).size() == 0)
       message: "job labels, annotations or finalizers differ from the CronJob"
 ---
-# One binding per namespace whose backup CronJob the operator may start (the same namespaces as the RoleBindings in operator.yaml);
+# One binding per namespace whose backup CronJob may be started (the RoleBindings of operator.yaml, which the short-lived admin shares outside the six);
 # the parameter is that CronJob by name. It only matches marked Jobs (the mark is set by the ServiceAccount's own requests), so a missing
 # CronJob (Deny) stops the operator and nobody else.
 apiVersion: admissionregistration.k8s.io/v1
@@ -143,6 +147,27 @@ spec:
     namespaceSelector:
       matchLabels:
         kubernetes.io/metadata.name: affine
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-authentik
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: authentik-pg-dump
+    namespace: authentik
+    parameterNotFoundAction: Deny
+  matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: authentik
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -249,7 +274,7 @@ spec:
       matchLabels:
         kubernetes.io/metadata.name: wiki
 ---
-# Every other namespace: no parameter, so the operator is denied there; requests of other users are skipped by the policy.
+# Every other namespace: no parameter, so the guarded identities are denied there; requests of other users are skipped by the policy.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
@@ -264,9 +289,9 @@ spec:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: NotIn
-          values: ["affine", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
+          values: ["affine", "authentik", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
 ---
-# Wherever the mark is missing (the marking policy absent or broken, or a different value): no parameter, so the operator is denied.
+# Wherever the mark is missing (the marking policy absent or broken, or a different value): no parameter, so the guarded identities are denied.
 # NotIn matches Jobs without the label as well. Requests of other users are skipped by the policy's match condition.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -284,7 +309,7 @@ spec:
           operator: NotIn
           values: ["true"]
 ---
-# Marks every Job of the ServiceAccount (mutating admission runs before validating admission; a value sent by the client is replaced).
+# Marks every Job of the guarded identities (mutating admission runs before validating admission; a value sent by the client is replaced).
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
@@ -301,8 +326,11 @@ spec:
         operations: ["CREATE"]
         resources: ["jobs"]
   matchConditions:
-    - name: operator-only
-      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator'"
+    - name: guarded-identities
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator' ||
+        (request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit' &&
+        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'uptime-kuma', 'wiki']))
   mutations:
     - patchType: ApplyConfiguration
       applyConfiguration:

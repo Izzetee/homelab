@@ -1,0 +1,34 @@
+# Namespace for short-lived probe pods that test what a network policy lets through. Nothing runs here permanently: no Service, no Secret,
+# and no pod accepts a connection, so a probe is a client only. The role below lets the short-lived admin identity (jit-admin.yaml) manage
+# pods and read their logs in this namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hl-probe
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+# An empty rule list for the ingress side: every pod in the namespace refuses all incoming connections. Egress stays open, like in the other
+# application namespaces without a policy of their own.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-ingress
+  namespace: hl-probe
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Pods and their logs only: no exec, no Job, no Service, no Secret, nothing cluster-scoped. Bound to hl-admin-jit in hl-probe only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hl-probe
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
