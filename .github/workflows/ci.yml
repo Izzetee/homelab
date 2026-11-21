@@ -58,6 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: yamllint
         run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/code" -w /code pipelinecomponents/yamllint:0.35.27@sha256:f7f7b4f8824839e33690a880dbe20944128b0dc9c55522a0b92a29b3a905cecf yamllint -c .yamllint.yaml .
@@ -69,6 +70,14 @@ jobs:
         run: ci/check-workflows.sh
       - name: Renovate config
         run: docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator ghcr.io/renovatebot/renovate:44.257.6@sha256:6a036e222c8b172734be034d22d3df96d73a4e701a38bd14ea1bb97887705e75 --strict renovate.json
+      - name: Newest-release self-test
+        run: ci/check-newest-selftest.sh
+      - name: Newest releases of new dependencies
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: ci/check-newest.sh "$BASE_SHA"
 
   kubernetes:
     name: kubernetes

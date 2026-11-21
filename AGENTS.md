@@ -46,7 +46,9 @@ Nothing here pushes into the cluster.
   only a change inside one existing application directory (`apps/tools/<app>/`). **The owner merges everything else** (new applications, platform,
   identity, observability, networking, docs, tools, agent rules, CI) with `gh pr merge <n> --rebase --match-head-commit <reviewed sha>`. Skill `publish`.
   Until `homelab-door` is installed in a clone at the door cutover, publishing follows the clone's active pre-push hook; agents do not install
-  `homelab-door` themselves.
+  `homelab-door` themselves. **Exception (batch and revert):** pull requests the owner approved in one list that names each with its reviewed
+  head, and a revert the owner asked for, are merged by exactly that list and always bound to that head (`--expect-head` where the door has it,
+  else the owner's `gh pr merge --rebase --match-head-commit <reviewed sha>`); a head that moved is not merged.
 - **The owner's go** is needed before deleting anything that exists, before changing an access control or a credential, and before a public hostname
   is opted in. Create new things freely; remove nothing without the go.
 - **Changelog**: after every merged pull request write one entry in the private wiki collection `Changelog` and update the `operations` pages the
@@ -58,7 +60,9 @@ Nothing here pushes into the cluster.
 - Workflows: `permissions: {}` on top, `contents: read` per job, actions pinned to a full commit SHA, tools run from images pinned by digest, no
   `${{ github.event.* }}` inside `run:` (pass values through `env:`). Changes to `.github/`, `ci/`, `.gitleaks.toml`, `renovate.json` and
   `CODEOWNERS` are guardrail changes and need the owner's approval.
-- Renovate opens the dependency pull requests; it never merges guardrail files, Ansible collections or OpenTofu providers automatically.
+- Renovate opens the dependency pull requests. What it may merge itself is only what a `packageRules` entry with `automerge: true` in
+  `renovate.json` names (after `ci-ok`, in its window); it never merges guardrail files, Ansible collections or OpenTofu providers automatically.
+  A new installation uses the newest stable release unless the owner names a version (skill `onboard-app`, `ci/check-newest.sh`).
 - One directory per application under `apps/tools/` (or `apps/platform/`, `apps/identity/`, `apps/observability/` for the platform); keep manifests
   small, validated by `kustomize build | kubeconform -strict`.
 - Scripts: `set -euo pipefail`, a dry run for every mutating step, and a self-test with stubs.
