@@ -257,7 +257,7 @@ tests:
           - exp_labels: {severity: warning, name: cert-manager, project: platform, operation_phase: Failed}
             exp_annotations: &syncfailed_ann
               summary: "Application cert-manager: the last sync failed or its sync status is unknown"
-              runbook: "Read the operation message of the Application; revert the pull request that changed it, or fix forward."
+              runbook: "Read the operation message of the Application; revert the pull request that changed it (/skill:hl-run-iteration revert <pr>), or fix forward."
   - name: sync operation errored
     interval: 1m
     input_series:
