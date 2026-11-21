@@ -804,6 +804,18 @@ renovate_case "the bot author with another committer than web-flow" "FAIL identi
 reset_stubs
 door r-ok
 [[ $rc != 0 && $out == *'FAIL identity'* && ! -e $t/endpoint.git/refs/heads/r-ok ]] && ok "a push of the bot-authored commit: FAIL identity (the strict rule), nothing pushed" || bad "bot push: rc=$rc $out"
+mkbranch r-botbot
+put apps/tools/demo/configmap.yaml 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo
+  namespace: demo
+data:
+  mode: six'
+renovate_commit "Update demo with the bot as committer" "$BOT"
+reset_stubs
+door r-botbot
+[[ $rc != 0 && $out == *'FAIL identity'* && ! -e $t/endpoint.git/refs/heads/r-botbot ]] && ok "a push range with bot author and bot committer: FAIL identity, nothing pushed" || bad "bot/bot push: rc=$rc $out"
 mkbranch r-mixed
 put apps/tools/demo/configmap.yaml 'apiVersion: v1
 kind: ConfigMap
@@ -844,12 +856,17 @@ prov_case() {
   git -C "$CA" add prov.txt
   GIT_AUTHOR_EMAIL=$([[ $2 == bot ]] && echo "$BOT" || echo "$OWN_AT") GIT_COMMITTER_EMAIL=$3 git -C "$CA" commit -q -m "prov: $1"
   sha=$(git -C "$CA" rev-parse HEAD)
-  python3 - "$t/state/gh-state.json" "$sha" "$4" "$5" "$6" "$7" <<'PYX'
+  # PROV_SECOND="<login> <type> <merged> <merged_by>" adds a second PR (91) that carried the same commit, listed after the first
+  python3 - "$t/state/gh-state.json" "$sha" "$4" "$5" "$6" "$7" "${PROV_SECOND:-}" <<'PYX'
 import json, sys
-p, sha, login, typ, merged, by = sys.argv[1:]
+p, sha, login, typ, merged, by, second = sys.argv[1:]
 s = json.load(open(p))
 s["commit_pulls"] = {} if login == "none" else {sha: [{"number": 90}]}
 s["pulls"]["90"] = {"user": {"login": login, "type": typ}, "merged": merged == "true", "merged_by": None if by == "none" else {"login": by}}
+if second:
+    l2, t2, m2, b2 = second.split()
+    s["commit_pulls"].setdefault(sha, []).append({"number": 91})
+    s["pulls"]["91"] = {"user": {"login": l2, "type": t2}, "merged": m2 == "true", "merged_by": None if b2 == "none" else {"login": b2}}
 json.dump(s, open(p, "w"))
 PYX
   reset_stubs
@@ -879,6 +896,12 @@ prov_case "bot author, bot committer, bot PR not merged" bot "$BOT" "$BOTLOGIN" 
 if grep -qE '^GET repos/Izzetee/homelab/(commits/[0-9a-f]{40}/pulls|pulls/[0-9]+)$' "$t/state/gh-requests.log" && ! grep -qvE '^GET repos/Izzetee/homelab/(commits/[0-9a-f]{40}/pulls|pulls/[0-9]+)$' "$t/state/gh-requests.log"; then
   ok "--check --all reads only commits/<sha>/pulls and pulls/<n>"
 else bad "--check --all API paths"; fi
+# a commit carried by two PRs: any qualifying association counts, in either order, whatever the other PR is
+PROV_SECOND="Izzetee User true Izzetee" prov_case "two PRs, the bot's merge first and a user's PR second, web-flow committer" bot "$WEBFLOW" "$BOTLOGIN" Bot true "$BOTLOGIN" OK
+PROV_SECOND="$BOTLOGIN Bot true $BOTLOGIN" prov_case "two PRs, a user's PR first and the bot's merge second, web-flow committer" bot "$WEBFLOW" Izzetee User true Izzetee OK
+PROV_SECOND="$BOTLOGIN Bot true $BOTLOGIN" prov_case "two PRs, merged by the owner first and by the bot second, bot committer" bot "$BOT" "$BOTLOGIN" Bot true Izzetee OK
+PROV_SECOND="$BOTLOGIN Bot true Izzetee" prov_case "two PRs, both merged by the owner, web-flow committer" bot "$WEBFLOW" "$BOTLOGIN" Bot true Izzetee FAIL
+PROV_SECOND="$BOTLOGIN Bot true Izzetee" prov_case "a user's PR first, the bot's PR merged by the owner second, personal committer" bot "$PERSONAL_AT" Izzetee User true Izzetee OK
 prov_case "own author and bot committer" own "$BOT" "$BOTLOGIN" Bot true "$BOTLOGIN" FAIL
 git -C "$CA" checkout -q -B prov origin/main
 door_all
