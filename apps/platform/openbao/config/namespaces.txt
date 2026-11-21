@@ -6,6 +6,7 @@ cert-manager
 cloudflared
 external-dns
 garage
+hubble-ui
 juraticker
 monitoring
 open-webui

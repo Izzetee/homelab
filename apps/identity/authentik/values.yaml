@@ -137,3 +137,8 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: agentgateway
+    - name: AUTHENTIK_OIDC_HUBBLE_UI_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: hubble-ui

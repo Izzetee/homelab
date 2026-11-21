@@ -1,0 +1,10 @@
+# Every object names its own namespace: the policies for the UI and the relay live in kube-system.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - serviceaccount.yaml
+  - external-secret.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+  - network-policy.yaml
