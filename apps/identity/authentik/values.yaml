@@ -17,7 +17,7 @@ global:
     - name: AUTHENTIK_POSTGRESQL__PASSWORD
       valueFrom:
         secretKeyRef:
-          name: authentik-db-app
+          name: authentik-db18-app
           key: password
     - name: AUTHENTIK_SECRET_KEY
       valueFrom:
@@ -50,7 +50,7 @@ authentik:
   error_reporting:
     enabled: false
   postgresql:
-    host: authentik-db-rw
+    host: authentik-db18-rw
     name: authentik
     user: authentik
     port: 5432
@@ -60,8 +60,7 @@ blueprints:
   configMaps:
     - authentik-blueprints
 server:
-  # stopped for the PostgreSQL 18 import; restored by the switch change
-  replicas: 0
+  replicas: 1
   serviceAccountName: authentik
   containerSecurityContext:
     allowPrivilegeEscalation: false
@@ -92,8 +91,7 @@ server:
       path: /-/health/live/
       port: http
 worker:
-  # stopped for the PostgreSQL 18 import; restored by the switch change
-  replicas: 0
+  replicas: 1
   serviceAccountName: authentik
   automountServiceAccountToken: false
   containerSecurityContext:
