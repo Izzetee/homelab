@@ -73,7 +73,7 @@ spec:
             - port: "8081"
               protocol: TCP
 ---
-# Only the sign-in proxy may reach the UI. Ingress rules only: egress stays as the Cilium chart sets it.
+# Allow rule: the sign-in proxy to the UI on its HTTP port. Ingress rules only; egress stays as the Cilium chart sets it.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -96,7 +96,7 @@ spec:
             - port: "8081"
               protocol: TCP
 ---
-# Only the UI may reach the relay. Ingress rules only: egress stays as the Cilium chart sets it.
+# Allow rule: the UI to the relay on its gRPC port. Ingress rules only; egress stays as the Cilium chart sets it.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
