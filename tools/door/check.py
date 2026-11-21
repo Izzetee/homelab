@@ -75,10 +75,14 @@ def verified_shas(path):
 
 
 def proven_merges(path):
-    """sha -> merged_by login of the commits the caller proved from the API (a PR opened by renovate[bot], merged)."""
+    """sha -> set of merged_by logins of the commits the caller proved from the API (every PR opened by renovate[bot] and merged that carried it)."""
     with open(path, encoding="utf-8") as fh:
         rows = json.load(fh)
-    return {r["sha"]: str(r.get("merged_by") or "") for r in rows if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{40}", str(r.get("sha", "")))}
+    out = {}
+    for r in rows:
+        if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{40}", str(r.get("sha", ""))):
+            out.setdefault(r["sha"], set()).add(str(r.get("merged_by") or ""))
+    return out
 
 
 def bot_shas(repo, revs):
@@ -101,8 +105,8 @@ def check_commits(repo, revs, all_mode, verified=None, proven=None):
         bot_ok = verified is not None and a == RENOVATE and cm == WEBFLOW and sha in verified
         # all-mode (`--check --all`): the bot address as author only with API provenance for that commit (a PR opened by renovate[bot] and
         # merged): a bot or web-flow committer needs the merge by renovate[bot] itself, a personal or own committer any merge (the owner's)
-        merged_by = (proven or {}).get(sha) if all_mode and a == RENOVATE else None
-        proven_ok = merged_by is not None and ((cm in (RENOVATE, WEBFLOW) and merged_by == "renovate[bot]") or cm in (PERSONAL, OWN))
+        mergers = (proven or {}).get(sha) if all_mode and a == RENOVATE else None
+        proven_ok = bool(mergers) and ((cm in (RENOVATE, WEBFLOW) and "renovate[bot]" in mergers) or cm in (PERSONAL, OWN))
         if not (proven_ok or (cm in COMMITTERS and (a in AUTHORS or bot_ok))):
             fail(f"identity {sha[:7]}")
         if ADDRESS.search(msg):
