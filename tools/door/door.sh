@@ -250,8 +250,25 @@ check_tree_main() { # check_tree_main [<rev>]
   echo "OK door tree ${TIP:0:7}"
 }
 
+# renovate_provenance: for every commit authored by the Renovate bot address (any committer) the PR that carried it, from the API (read only):
+# $TMP/proven.json gets {sha, merged_by} of the commits whose PR was opened by renovate[bot] and merged; check.py applies the identity table
+renovate_provenance() {
+  local sha n pulls pr
+  : >"$TMP/proven.jsonl"
+  while read -r sha; do
+    [[ -n $sha ]] || continue
+    pulls=$(gh_call GET "repos/$REPO/commits/$sha/pulls" 2>/dev/null) || { echo "FAIL provenance ${sha:0:7} unreadable"; return 1; }
+    for n in $(jq -r '.[].number' <<<"$pulls" 2>/dev/null); do
+      [[ $n =~ ^[0-9]+$ ]] || continue
+      pr=$(gh_call GET "repos/$REPO/pulls/$n" 2>/dev/null) || { echo "FAIL provenance ${sha:0:7} unreadable"; return 1; }
+      jq -c --arg s "$sha" 'select(.user.login == "renovate[bot]" and .user.type == "Bot" and .merged == true) | {sha: $s, merged_by: (.merged_by.login // "")}' <<<"$pr" >>"$TMP/proven.jsonl"
+    done
+  done < <(python3 "$CHK" bot-shas "$HL" "${REVS[@]}")
+  jq -s '.' "$TMP/proven.jsonl" >"$TMP/proven.json"
+}
+
 check_main() { # check_main <range>|--all
-  local mode=""
+  local mode="" proven=()
   if [[ ${1:-} == --all ]]; then REVS=(--all); mode=--all-mode; TIP=HEAD
   else
     [[ ${1:-} =~ ^[0-9A-Za-z._/^~@:-]+(\.\.[0-9A-Za-z._/^~@:-]+)?$ ]] || die "bad range"
@@ -260,7 +277,8 @@ check_main() { # check_main <range>|--all
   fi
   fetch_base
   local out rc=0
-  out=$(python3 "$CHK" commits "$HL" "${REVS[@]}" ${mode:+"$mode"}) || rc=$?
+  if [[ -n $mode ]]; then renovate_provenance || exit 1; proven=(--renovate-merged "$TMP/proven.json"); fi
+  out=$(python3 "$CHK" commits "$HL" "${REVS[@]}" ${mode:+"$mode"} ${proven[@]+"${proven[@]}"}) || rc=$?
   grep '^FAIL ' <<<"$out" || true
   N=$(sed -n 's/^STAT commits=//p' <<<"$out")
   [[ $N =~ ^[0-9]+$ ]] || { echo "FAIL door check could not run"; exit 1; }
@@ -284,6 +302,7 @@ gh_api_allowed() { # gh_api_allowed <method> <path>
   local m=$1 p=$2 base="repos/$REPO"
   [[ $m == GET && $p =~ ^$base/pulls/[0-9]+$ ]] && return 0
   [[ $m == GET && $p =~ ^$base/commits/[0-9a-f]{40}/check-runs$ ]] && return 0
+  [[ $m == GET && $p =~ ^$base/commits/[0-9a-f]{40}/pulls$ ]] && return 0
   [[ $m == GET && $p =~ ^$base/pulls/[0-9]+/commits\?per_page=100$ ]] && return 0
   [[ $m == POST && $p == "$base/pulls" ]] && return 0
   [[ $m == PATCH && $p =~ ^$base/pulls/[0-9]+$ ]] && return 0

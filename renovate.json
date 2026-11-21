@@ -12,6 +12,7 @@
   "rebaseWhen": "conflicted",
   "updateNotScheduled": false,
   "automerge": false,
+  "platformAutomerge": false,
   "major": {
     "dependencyDashboardApproval": true
   },
@@ -122,6 +123,76 @@
       "description": "Dummy image of a CI self-test, not a dependency",
       "matchPackageNames": ["example.test/**"],
       "enabled": false
+    },
+    {
+      "description": "Automatic merge: the Redis caches of affine and wiki (digest, patch, minor): after ci-ok, Saturday daytime, three days after the release",
+      "matchManagers": ["kubernetes"],
+      "matchPackageNames": ["docker.io/library/redis"],
+      "matchFileNames": ["apps/tools/*/redis.yaml"],
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "automerge": true,
+      "schedule": ["* 0-17 * * 6"],
+      "automergeSchedule": ["* 6-17 * * 6"],
+      "rebaseWhen": "behind-base-branch",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
+    },
+    {
+      "description": "Automatic merge: the cloudflared image (digest, patch, minor; a CalVer minor is the next monthly release)",
+      "matchManagers": ["kubernetes"],
+      "matchPackageNames": ["docker.io/cloudflare/cloudflared"],
+      "matchFileNames": ["apps/platform/cloudflared/**"],
+      "matchUpdateTypes": ["digest", "patch", "minor"],
+      "automerge": true,
+      "schedule": ["* 0-17 * * 6"],
+      "automergeSchedule": ["* 6-17 * * 6"],
+      "rebaseWhen": "behind-base-branch",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
+    },
+    {
+      "description": "Automatic merge: exporters and the collector in monitoring (chart patch and minor)",
+      "matchManagers": ["argocd"],
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["prometheus-blackbox-exporter", "prometheus-snmp-exporter", "alloy"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "schedule": ["* 0-17 * * 6"],
+      "automergeSchedule": ["* 6-17 * * 6"],
+      "rebaseWhen": "behind-base-branch",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
+    },
+    {
+      "description": "Automatic merge: external-dns and cert-manager (chart patch and minor)",
+      "matchManagers": ["argocd"],
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["external-dns", "cert-manager"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "schedule": ["* 0-17 * * 6"],
+      "automergeSchedule": ["* 6-17 * * 6"],
+      "rebaseWhen": "behind-base-branch",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
+    },
+    {
+      "description": "Automatic merge: loki, tempo and kube-prometheus-stack (chart patch and minor)",
+      "matchManagers": ["argocd"],
+      "matchDatasources": ["helm"],
+      "matchPackageNames": ["loki", "tempo", "kube-prometheus-stack"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "schedule": ["* 0-17 * * 6"],
+      "automergeSchedule": ["* 6-17 * * 6"],
+      "rebaseWhen": "behind-base-branch",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
+    },
+    {
+      "description": "A current value that is not a full SemVer (floating tag, 8-alpine, latest) never merges by itself; this rule comes after every automatic rule and wins",
+      "matchCurrentValue": "!/^v?\\d+\\.\\d+\\.\\d+(-[a-z0-9.]+)?$/",
+      "automerge": false
     },
     {
       "description": "Guardrail files are never merged automatically",

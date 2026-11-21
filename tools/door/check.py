@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks of the publishing door (door.sh).
 
-  check.py commits REPO RANGE_REV... [--all-mode] [--renovate PR_COMMITS.json] | tree REPO BASE TIP [--all] | text FILE... | ref NAME | merge-paths REPO BASE N | gitleaks REPORT.json
+  check.py commits REPO RANGE_REV... [--all-mode] [--renovate PR_COMMITS.json] [--renovate-merged PROVEN.json] | bot-shas REPO REV... | tree REPO BASE TIP [--all] | text FILE... | ref NAME | merge-paths REPO BASE N | gitleaks REPORT.json
 """
 import fnmatch
 import json
@@ -74,7 +74,20 @@ def verified_shas(path):
             and ((r.get("commit") or {}).get("verification") or {}).get("reason") == "valid"}
 
 
-def check_commits(repo, revs, all_mode, verified=None):
+def proven_merges(path):
+    """sha -> merged_by login of the commits the caller proved from the API (a PR opened by renovate[bot], merged)."""
+    with open(path, encoding="utf-8") as fh:
+        rows = json.load(fh)
+    return {r["sha"]: str(r.get("merged_by") or "") for r in rows if isinstance(r, dict) and re.fullmatch(r"[0-9a-f]{40}", str(r.get("sha", "")))}
+
+
+def bot_shas(repo, revs):
+    """Every commit in revs whose author is the Renovate bot address, whatever the committer."""
+    out = git(repo, "log", "--format=%H%x00%ae", *revs).decode("utf-8", "replace")
+    return [line.split("\x00")[0] for line in out.splitlines() if line.split("\x00")[1:] and line.split("\x00")[1].strip().lower() == RENOVATE]
+
+
+def check_commits(repo, revs, all_mode, verified=None, proven=None):
     out = git(repo, "log", "--format=%H%x00%ae%x00%ce%x00%B%x1e", *revs).decode("utf-8", "replace")
     n = 0
     for c in out.split("\x1e"):
@@ -86,7 +99,11 @@ def check_commits(repo, revs, all_mode, verified=None):
         # Renovate mode (a PR opened by renovate[bot], decided by the caller): the bot address as author only with the web-flow committer
         # and a commit GitHub reports as verified; every other commit keeps the strict rule
         bot_ok = verified is not None and a == RENOVATE and cm == WEBFLOW and sha in verified
-        if not (cm in COMMITTERS and (a in AUTHORS or (all_mode and a == RENOVATE) or bot_ok)):
+        # all-mode (`--check --all`): the bot address as author only with API provenance for that commit (a PR opened by renovate[bot] and
+        # merged): a bot or web-flow committer needs the merge by renovate[bot] itself, a personal or own committer any merge (the owner's)
+        merged_by = (proven or {}).get(sha) if all_mode and a == RENOVATE else None
+        proven_ok = merged_by is not None and ((cm in (RENOVATE, WEBFLOW) and merged_by == "renovate[bot]") or cm in (PERSONAL, OWN))
+        if not (proven_ok or (cm in COMMITTERS and (a in AUTHORS or bot_ok))):
             fail(f"identity {sha[:7]}")
         if ADDRESS.search(msg):
             fail(f"text {sha[:7]} address")
@@ -610,12 +627,18 @@ def main(argv):
         if cmd == "commits" and len(rest) >= 2:
             all_mode = "--all-mode" in rest
             args = rest[1:]
-            verified = None
+            verified = proven = None
+            if "--renovate-merged" in args:
+                i = args.index("--renovate-merged")
+                proven = proven_merges(args[i + 1])
+                del args[i : i + 2]
             if "--renovate" in args:
                 i = args.index("--renovate")
                 verified = verified_shas(args[i + 1])
                 del args[i : i + 2]
-            check_commits(rest[0], [r for r in args if r != "--all-mode"], all_mode, verified)
+            check_commits(rest[0], [r for r in args if r != "--all-mode"], all_mode, verified, proven)
+        elif cmd == "bot-shas" and len(rest) >= 2:
+            print("\n".join(bot_shas(rest[0], rest[1:])))
         elif cmd == "tree" and len(rest) >= 3:
             whole = "--all" in rest[3:]
             check_tree_apps(rest[0], rest[1], rest[2], whole)
