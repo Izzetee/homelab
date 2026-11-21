@@ -830,6 +830,62 @@ renovate_case "a renovate[bot] PR outside apps/tools/" "FAIL merge 29 owner"
 grep -qE '^(GET|POST|PATCH|PUT) repos/Izzetee/homelab/(pulls|commits)' "$t/state/gh-requests.log" || true
 ! grep -qE 'contents|git/' "$t/state/gh-requests.log" && ok "no content or git/ API path was ever called" || bad "forbidden API path"
 
+# ---- `--check --all`: the bot address as author only with API provenance (a PR opened by renovate[bot] and merged)
+git clone -q --single-branch -b main "$t/endpoint.git" "$t/clone-all"
+git -C "$t/clone-all" remote set-url origin https://github.com/Izzetee/homelab.git
+CA=$t/clone-all
+cp -p "$CL/.git/hooks/pre-push" "$CA/.git/hooks/pre-push" # the launcher checks the clone's hook; the same installed launcher
+door_all() { rc=0; out=$(cd "$CA" && entries "$HD" --check --all 2>&1 </dev/null) || rc=$?; }
+# prov_case <label> <author bot|own> <committer email> <pr opener login> <opener type> <merged true|false> <merged_by|none> <expected line>
+prov_case() {
+  local sha
+  git -C "$CA" checkout -q -B prov origin/main
+  printf '%s\n' "$1" >"$CA/prov.txt"
+  git -C "$CA" add prov.txt
+  GIT_AUTHOR_EMAIL=$([[ $2 == bot ]] && echo "$BOT" || echo "$OWN_AT") GIT_COMMITTER_EMAIL=$3 git -C "$CA" commit -q -m "prov: $1"
+  sha=$(git -C "$CA" rev-parse HEAD)
+  python3 - "$t/state/gh-state.json" "$sha" "$4" "$5" "$6" "$7" <<'PYX'
+import json, sys
+p, sha, login, typ, merged, by = sys.argv[1:]
+s = json.load(open(p))
+s["commit_pulls"] = {} if login == "none" else {sha: [{"number": 90}]}
+s["pulls"]["90"] = {"user": {"login": login, "type": typ}, "merged": merged == "true", "merged_by": None if by == "none" else {"login": by}}
+json.dump(s, open(p, "w"))
+PYX
+  reset_stubs
+  door_all
+  git -C "$CA" checkout -q --detach origin/main
+  git -C "$CA" branch -q -D prov
+  if [[ $8 == OK ]]; then
+    [[ $rc == 0 && $out == *'OK door commits='* ]] && ok "--check --all, $1: OK" || bad "--check --all, $1: rc=$rc $out"
+  else
+    [[ $rc != 0 && $out == *"FAIL identity ${sha:0:7}"* ]] && ok "--check --all, $1: FAIL identity" || bad "--check --all, $1: rc=$rc $out"
+  fi
+}
+OWN_AT="18075479+Izzetee${AT}users.noreply.github.com"
+PERSONAL_AT="martin.huesgen${AT}googlemail.com"
+BOTLOGIN='renovate[bot]'
+prov_case "forged bot author and bot committer, no PR" bot "$BOT" none Bot true none FAIL
+prov_case "forged bot author and web-flow committer, no PR" bot "$WEBFLOW" none Bot true none FAIL
+prov_case "proven bot author, bot committer, merged by the bot" bot "$BOT" "$BOTLOGIN" Bot true "$BOTLOGIN" OK
+prov_case "proven bot author, web-flow committer, merged by the bot" bot "$WEBFLOW" "$BOTLOGIN" Bot true "$BOTLOGIN" OK
+prov_case "bot PR merged by the owner, bot committer" bot "$BOT" "$BOTLOGIN" Bot true Izzetee FAIL
+prov_case "bot PR merged by the owner, web-flow committer" bot "$WEBFLOW" "$BOTLOGIN" Bot true Izzetee FAIL
+prov_case "bot PR merged by the owner, personal committer" bot "$PERSONAL_AT" "$BOTLOGIN" Bot true Izzetee OK
+prov_case "bot author, personal committer, no PR" bot "$PERSONAL_AT" none Bot true none FAIL
+prov_case "bot author, personal committer, PR not opened by the bot" bot "$PERSONAL_AT" Izzetee User true Izzetee FAIL
+prov_case "bot author, personal committer, PR opened by a user named like the bot" bot "$PERSONAL_AT" "$BOTLOGIN" User true Izzetee FAIL
+prov_case "bot author, bot committer, bot PR not merged" bot "$BOT" "$BOTLOGIN" Bot false none FAIL
+if grep -qE '^GET repos/Izzetee/homelab/(commits/[0-9a-f]{40}/pulls|pulls/[0-9]+)$' "$t/state/gh-requests.log" && ! grep -qvE '^GET repos/Izzetee/homelab/(commits/[0-9a-f]{40}/pulls|pulls/[0-9]+)$' "$t/state/gh-requests.log"; then
+  ok "--check --all reads only commits/<sha>/pulls and pulls/<n>"
+else bad "--check --all API paths"; fi
+prov_case "own author and bot committer" own "$BOT" "$BOTLOGIN" Bot true "$BOTLOGIN" FAIL
+git -C "$CA" checkout -q -B prov origin/main
+door_all
+[[ $rc == 0 && $out == *'OK door commits='* && ! -s $t/state/gh-requests.log ]] && ok "--check --all on a history without bot commits: OK, no API read" || bad "--check --all clean: rc=$rc $out"
+git -C "$CA" checkout -q --detach origin/main
+git -C "$CA" branch -q -D prov
+
 # ---- PR text
 reset_stubs
 printf 'Change the demo mode\n' >"$t/title.txt"
