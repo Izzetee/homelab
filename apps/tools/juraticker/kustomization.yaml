@@ -5,6 +5,7 @@ resources:
   - config.yaml
   - external-secrets.yaml
   - cluster.yaml
+  - cluster-18.yaml
   - backend.yaml
   - frontend.yaml
   - service.yaml
