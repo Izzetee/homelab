@@ -6,7 +6,8 @@ metadata:
   labels:
     app.kubernetes.io/name: outline
 spec:
-  replicas: 1
+  # stopped for the PostgreSQL 18 import; restored by the switch change
+  replicas: 0
   strategy:
     type: Recreate
   selector:
