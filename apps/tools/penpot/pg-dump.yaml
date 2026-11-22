@@ -1,0 +1,90 @@
+# Dump set: pg_dump of the database, its sha256 and two counts; files 0600; a set not written completely is removed and the job fails.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: penpot-pg-dump
+  namespace: penpot
+  labels:
+    app.kubernetes.io/name: penpot-pg-dump
+    homelab.io/backup: "true"
+spec:
+  schedule: "40 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: penpot-pg-dump
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 26
+            runAsGroup: 26
+            fsGroup: 26
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: dump
+              image: ghcr.io/cloudnative-pg/postgresql:18.7-standard-trixie@sha256:5827829071060876c4029650c04183e4ee562da3ebb9e88c914d67c8dc8669d6
+              command: ["/bin/bash", "-euo", "pipefail", "-c"]
+              args:
+                - |
+                  umask 077
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  cd /backup
+                  # any failure below removes this stamp's files
+                  ok=0
+                  trap '[ "$ok" = 1 ] || rm -f "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"' EXIT
+                  pg_dump -Fc -h penpot-db-r -U penpot -d penpot -f "penpot-$stamp.dump"
+                  sha256sum "penpot-$stamp.dump" >"penpot-$stamp.dump.sha256"
+                  psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from file where deleted_at is null' >"penpot-$stamp.count"
+                  psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from storage_object where deleted_at is null' >"penpot-$stamp.objects"
+                  ok=1
+                  printf %s "penpot-$stamp" >/dev/termination-log
+                  # pruning is skipped when the pod name contains -manual-
+                  case "$(cat /etc/hostname)" in
+                    *-manual-*) ;;
+                    *) ls -1 penpot-*.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.objects"; done ;;
+                  esac
+                  echo "set penpot-$stamp written"
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: penpot-db-app
+                      key: password
+                - name: HOME
+                  value: /tmp
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: penpot-backup
+            - name: tmp
+              emptyDir: {}

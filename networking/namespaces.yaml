@@ -74,6 +74,15 @@ metadata:
   labels:
     pod-security.kubernetes.io/enforce: restricted
 ---
+# The public label lets the design tool's route attach to the `tunnel` listener.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: penpot
+  labels:
+    homelab.io/public: "true"
+    pod-security.kubernetes.io/enforce: restricted
+---
 # The wiki is LAN only: no public label, so its route can attach to the `lan` listener only.
 apiVersion: v1
 kind: Namespace

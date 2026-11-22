@@ -1,0 +1,104 @@
+# nginx with the built web client. Its entrypoint rewrites its configuration from the environment, so the root filesystem is writable here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-frontend
+  namespace: penpot
+  labels:
+    app.kubernetes.io/name: penpot-frontend
+    app.kubernetes.io/part-of: penpot
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: penpot-frontend
+        app.kubernetes.io/part-of: penpot
+    spec:
+      automountServiceAccountToken: false
+      # Placement: nodes with the label homelab.io/penpot=true (link not wifi, host not pi4-1); pod affinity on part-of=penpot keeps the pods on one node.
+      tolerations:
+        - key: homelab.io/pi
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: homelab.io/penpot
+                    operator: In
+                    values: ["true"]
+                  - key: homelab.io/link
+                    operator: NotIn
+                    values: [wifi]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [pi4-1]
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: penpot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: frontend
+          image: docker.io/penpotapp/frontend:2.19.3@sha256:d22ce9f6f4859adbc726f45965da0d4b083817b0c13ca4a49aa3e927901cccb9
+          env:
+            - name: PENPOT_PUBLIC_URI
+              value: "https://penpot.chill-town.de"
+            - name: PENPOT_FLAGS
+              value: "enable-login-with-oidc enable-oidc-registration disable-registration disable-login-with-password disable-email-verification disable-admin-console disable-telemetry"
+            - name: PENPOT_BACKEND_URI
+              value: "http://penpot-backend.penpot.svc.cluster.local:6060"
+            - name: PENPOT_EXPORTER_URI
+              value: "http://penpot-exporter.penpot.svc.cluster.local:6061"
+            - name: PENPOT_OIDC_NAME
+              value: "Authentik"
+            - name: PENPOT_HTTP_SERVER_WORKER_PROCESSES
+              value: "2"
+            - name: PENPOT_HTTP_SERVER_WORKER_CONNECTIONS
+              value: "1024"
+            - name: PENPOT_DISABLE_IPV6_LISTEN
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL

@@ -12,6 +12,7 @@ Conventions:
   allowlisted, stateless (no PVC, `nfs` or `hostPath` volume), multi-arch, require `homelab.io/link NotIn [wifi]` and
   `kubernetes.io/hostname NotIn [pi4-1]`, only prefer `homelab.io/node-class In [pi]`, and have an egress policy that allows no
   private range except cluster DNS (its pods leave with the node's LAN address).
+- Penpot's pods require the node label `homelab.io/penpot=true`, set in the Ansible host variables.
 - `kustomize build <dir> | kubeconform -strict` passes locally and in CI.
 
 Layout:

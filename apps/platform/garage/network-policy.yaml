@@ -1,5 +1,5 @@
 # Default deny for the namespace (cluster DNS excepted). Garage takes the object API from the gateway, the copy job and the node
-# (probes), and the admin port from the gateway (the health path), Prometheus and the node. It makes no connection of its own beyond DNS.
+# (probes), the object API also from the Penpot backend and frontend, and the admin port from the gateway (the health path), Prometheus and the node. It makes no connection of its own beyond DNS.
 # The copy job reaches nothing but the object API of Garage.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -46,6 +46,17 @@ spec:
             - port: "3900"
               protocol: TCP
             - port: "3903"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-backend
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-frontend
+      toPorts:
+        - ports:
+            - port: "3900"
               protocol: TCP
     - fromEndpoints:
         - matchLabels:

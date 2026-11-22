@@ -1,0 +1,114 @@
+# Renders exports (PNG, PDF) in a headless browser through the frontend's internal address; one job at a time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-exporter
+  namespace: penpot
+  labels:
+    app.kubernetes.io/name: penpot-exporter
+    app.kubernetes.io/part-of: penpot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: penpot-exporter
+        app.kubernetes.io/part-of: penpot
+    spec:
+      automountServiceAccountToken: false
+      # Placement: nodes with the label homelab.io/penpot=true (link not wifi, host not pi4-1); pod affinity on part-of=penpot keeps the pods on one node.
+      tolerations:
+        - key: homelab.io/pi
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: homelab.io/penpot
+                    operator: In
+                    values: ["true"]
+                  - key: homelab.io/link
+                    operator: NotIn
+                    values: [wifi]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [pi4-1]
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: penpot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: exporter
+          image: docker.io/penpotapp/exporter:2.19.3@sha256:1705d70e79f3530b3cee65d0cdbee3c5f44f26d62f5ad43bac7945dce4c7b653
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: PENPOT_PUBLIC_URI
+              value: "https://penpot.chill-town.de"
+            - name: PENPOT_FLAGS
+              value: "enable-login-with-oidc enable-oidc-registration disable-registration disable-login-with-password disable-email-verification disable-admin-console disable-telemetry"
+            - name: PENPOT_INTERNAL_URI
+              value: "http://penpot-frontend.penpot.svc.cluster.local:8080"
+            - name: PENPOT_REDIS_URI
+              value: "redis://penpot-valkey.penpot.svc.cluster.local:6379/0"
+            - name: PENPOT_EXPORTER_MAX_CONCURRENT_JOBS
+              value: "1"
+            - name: PENPOT_EXPORTER_MAX_JOBS_PER_PROFILE
+              value: "1"
+            - name: PENPOT_BROWSER_POOL_MAX
+              value: "1"
+            - name: PENPOT_WASM_WORKER_POOL_MAX
+              value: "1"
+            - name: PENPOT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-app
+                  key: secret-key
+          ports:
+            - name: http
+              containerPort: 6061
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
