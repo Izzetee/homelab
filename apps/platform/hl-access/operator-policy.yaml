@@ -124,7 +124,8 @@ spec:
         object.metadata.?finalizers.orValue([]).size() == 0)
       message: "job labels, annotations or finalizers differ from the CronJob"
 ---
-# One binding per namespace whose backup CronJob may be started (the RoleBindings of operator.yaml, which the short-lived admin shares outside the six);
+# One binding per namespace whose backup CronJob may be started (the RoleBindings of operator.yaml, which the short-lived admin shares outside the six;
+# garage and openbao bindings land before their RoleBindings, so the guard exists before the right);
 # the parameter is that CronJob by name. It only matches marked Jobs (the mark is set by the ServiceAccount's own requests), so a missing
 # CronJob (Deny) stops the operator and nobody else.
 apiVersion: admissionregistration.k8s.io/v1
@@ -274,6 +275,48 @@ spec:
       matchLabels:
         kubernetes.io/metadata.name: wiki
 ---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-garage
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: garage-backup
+    namespace: garage
+    parameterNotFoundAction: Deny
+  matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: garage
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-operator-jobs-openbao
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: openbao-snapshot
+    namespace: openbao
+    parameterNotFoundAction: Deny
+  matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openbao
+---
 # Every other namespace: no parameter, so the guarded identities are denied there; requests of other users are skipped by the policy.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -289,7 +332,7 @@ spec:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: NotIn
-          values: ["affine", "authentik", "juraticker", "n8n", "open-webui", "uptime-kuma", "wiki"]
+          values: ["affine", "authentik", "garage", "juraticker", "n8n", "open-webui", "openbao", "uptime-kuma", "wiki"]
 ---
 # Wherever the mark is missing (the marking policy absent or broken, or a different value): no parameter, so the guarded identities are denied.
 # NotIn matches Jobs without the label as well. Requests of other users are skipped by the policy's match condition.

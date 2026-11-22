@@ -1,5 +1,6 @@
 # Daily Raft snapshot onto the NFS volume. The job logs in with a projected token of its own account (role `snapshot`, read of the
-# snapshot endpoint only), keeps files private (umask 077) and the 14 newest.
+# snapshot endpoint only), keeps files private (umask 077) and the 14 newest. One run at a time holds a lock on the snapshot volume (a second
+# run exits 75 without writing); the set name goes to the termination message; a manual run (pod name contains -manual-) keeps every set.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -30,6 +31,14 @@ spec:
     spec:
       backoffLimit: 1
       activeDeadlineSeconds: 600
+      # exit 75 = another run holds the volume lock: fail the Job at once, never start a replacement pod that could write after the lock is free
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              containerName: snapshot
+              operator: In
+              values: [75]
       template:
         metadata:
           labels:
@@ -56,6 +65,8 @@ spec:
               args:
                 - |
                   umask 077
+                  exec 9>/snapshots/.partial-lock # the name pull copies skip
+                  flock -n 9 || { echo "snapshot: another run holds the lock"; exit 75; }
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   BAO_TOKEN=$(bao write -field=token auth/kubernetes/login role=snapshot jwt=@/var/run/secrets/openbao/token)
                   export BAO_TOKEN
@@ -63,8 +74,13 @@ spec:
                   bao token revoke -self >/dev/null
                   (cd /work && sha256sum "openbao-$stamp.snap" >"openbao-$stamp.snap.sha256")
                   cp "/work/openbao-$stamp.snap" "/work/openbao-$stamp.snap.sha256" /snapshots/
+                  printf %s "openbao-$stamp.snap" >/dev/termination-log
                   cd /snapshots
-                  ls -1 openbao-*.snap | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
+                  # a manual run (pod name contains -manual-) never removes an older set
+                  case "$(cat /etc/hostname)" in
+                    *-manual-*) ;;
+                    *) ls -1 openbao-*.snap | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done ;;
+                  esac
                   echo "snapshot openbao-$stamp.snap written"
               env:
                 - name: BAO_ADDR

@@ -1,0 +1,54 @@
+# The only change the short-lived admin hl-admin-jit (jit-admin.yaml, ClusterRole hl-ops in ops.yaml: nodes get, list, patch) may make to a Node:
+# set or remove a label whose key starts with homelab.io/ (what `kubectl label node` patches), except homelab.io/node-class and homelab.io/link,
+# which the scheduling rules of the workloads read. Spec, annotations, finalizers, owner references, every other label and the object name must
+# stay equal to the stored object. Requests of every other user are never evaluated. failurePolicy Fail and a Deny binding: when this policy is
+# broken the identity is denied; when the policy or its binding is missing nothing evaluates, so the token mint check refuses the token.
+# Object-typed values are compared with dyn() on both sides so the policy's type check stays free of warnings.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: hl-ops-node-labels
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["nodes"]
+  matchConditions:
+    - name: jit-only
+      expression: "request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit'"
+  variables:
+    - name: newLabels
+      expression: "object.metadata.?labels.orValue({})"
+    - name: oldLabels
+      expression: "oldObject.metadata.?labels.orValue({})"
+  validations:
+    - expression: >-
+        dyn(object.spec) == dyn(oldObject.spec)
+      message: "only homelab.io/ labels of a node may change (spec)"
+    - expression: >-
+        object.metadata.?annotations.orValue({}) == oldObject.metadata.?annotations.orValue({}) &&
+        object.metadata.?finalizers.orValue([]) == oldObject.metadata.?finalizers.orValue([]) &&
+        object.metadata.?ownerReferences.orValue([]) == oldObject.metadata.?ownerReferences.orValue([]) &&
+        object.metadata.name == oldObject.metadata.name
+      message: "only homelab.io/ labels of a node may change (metadata)"
+    - expression: >-
+        variables.newLabels.all(k, (k.startsWith('homelab.io/') && k != 'homelab.io/node-class' && k != 'homelab.io/link') ||
+        (k in variables.oldLabels && variables.newLabels[k] == variables.oldLabels[k])) &&
+        variables.oldLabels.all(k, (k.startsWith('homelab.io/') && k != 'homelab.io/node-class' && k != 'homelab.io/link') ||
+        k in variables.newLabels)
+      message: "only homelab.io/ labels of a node may change, not homelab.io/node-class or homelab.io/link (labels)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: hl-ops-node-labels
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-ops-node-labels
+  validationActions: ["Deny"]

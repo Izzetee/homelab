@@ -1,6 +1,8 @@
 # Nightly copy of every bucket. The job reads through the in-cluster Service with a read-only key, mirrors the buckets, compares the
 # mirror byte by byte, and keeps the newest seven sets (archive, listing, checksums) on the NFS volume. The listing is read from the
-# mirror the archive is made from. It stops before any write when the stored bytes exceed the size budget.
+# mirror the archive is made from. It stops before any write when the stored bytes exceed the size budget. One run at a time holds a lock
+# on the backup volume (a second run exits 75 without writing); the set name goes to the termination message; a manual run (pod name
+# contains -manual-) keeps every set.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -70,6 +72,8 @@ spec:
                   umask 077
                   MAX_BYTES=1073741824
                   KEEP=7
+                  exec 9>/backup/.partial-lock # the name pull copies skip
+                  flock -n 9 || { echo "backup: another run holds the lock"; exit 75; }
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   total=$(rclone size garage: --json | sed -n 's/.*"bytes":\([0-9]*\).*/\1/p')
                   if [ -z "$total" ]; then echo "backup: stored size unreadable"; exit 1; fi
@@ -100,11 +104,18 @@ spec:
                     mv "$p.$e" "/backup/garage-$stamp.$e"
                     mv "$p.$e.sha256" "/backup/garage-$stamp.$e.sha256"
                   done
+                  printf %s "garage-$stamp" >/dev/termination-log
                   cd /backup
-                  ls -1 garage-*.tar.gz | sort -r | tail -n +$((KEEP + 1)) | while read -r f; do
-                    base=${f%.tar.gz}
-                    rm -f "$base.tar.gz" "$base.tar.gz.sha256" "$base.json" "$base.json.sha256" "$base.sha256sums" "$base.sha256sums.sha256"
-                  done
+                  # a manual run (pod name contains -manual-) never removes an older set
+                  case "$(cat /etc/hostname)" in
+                    *-manual-*) ;;
+                    *)
+                      ls -1 garage-*.tar.gz | sort -r | tail -n +$((KEEP + 1)) | while read -r f; do
+                        base=${f%.tar.gz}
+                        rm -f "$base.tar.gz" "$base.tar.gz.sha256" "$base.json" "$base.json.sha256" "$base.sha256sums" "$base.sha256sums.sha256"
+                      done
+                      ;;
+                  esac
                   echo "backup garage-$stamp written: $total bytes"
               env:
                 - name: HOME
