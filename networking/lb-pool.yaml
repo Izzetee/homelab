@@ -9,7 +9,7 @@ spec:
       stop: 192.168.1.5
 ---
 # The LAN resolver address. The pool selects one Service by the namespace and name labels Cilium sets itself, so no other Service can take the address by
-# copying a label. 192.168.1.79 lies inside the DHCP range; a fixed reservation in the router keeps DHCP from leasing it.
+# copying a label.
 apiVersion: cilium.io/v2
 kind: CiliumLoadBalancerIPPool
 metadata:
