@@ -29,7 +29,7 @@ spec:
       expression: >-
         request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator' ||
         (request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit' &&
-        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'uptime-kuma', 'wiki']))
+        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'penpot', 'uptime-kuma', 'wiki']))
   variables:
     - name: tpl
       expression: "params.spec.jobTemplate"
@@ -278,6 +278,27 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
+  name: hl-operator-jobs-penpot
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: hl-operator-jobs
+  validationActions: ["Deny"]
+  paramRef:
+    name: penpot-pg-dump
+    namespace: penpot
+    parameterNotFoundAction: Deny
+  matchResources:
+    objectSelector:
+      matchLabels:
+        homelab.io/hl-operator: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: penpot
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
   name: hl-operator-jobs-garage
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
@@ -332,7 +353,7 @@ spec:
       matchExpressions:
         - key: kubernetes.io/metadata.name
           operator: NotIn
-          values: ["affine", "authentik", "garage", "juraticker", "n8n", "open-webui", "openbao", "uptime-kuma", "wiki"]
+          values: ["affine", "authentik", "garage", "juraticker", "n8n", "open-webui", "openbao", "penpot", "uptime-kuma", "wiki"]
 ---
 # Wherever the mark is missing (the marking policy absent or broken, or a different value): no parameter, so the guarded identities are denied.
 # NotIn matches Jobs without the label as well. Requests of other users are skipped by the policy's match condition.
@@ -373,7 +394,7 @@ spec:
       expression: >-
         request.userInfo.username == 'system:serviceaccount:hl-access:hl-operator' ||
         (request.userInfo.username == 'system:serviceaccount:hl-access:hl-admin-jit' &&
-        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'uptime-kuma', 'wiki']))
+        !(request.namespace in ['affine', 'juraticker', 'n8n', 'open-webui', 'penpot', 'uptime-kuma', 'wiki']))
   mutations:
     - patchType: ApplyConfiguration
       applyConfiguration:
