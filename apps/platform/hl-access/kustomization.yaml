@@ -10,3 +10,4 @@ resources:
   - jit-admin.yaml
   - probe.yaml
   - ops.yaml
+  - node-labels.yaml
