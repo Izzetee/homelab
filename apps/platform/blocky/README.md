@@ -68,7 +68,7 @@ slashes (`/^banners?[_.-]/`). If every group of a client has only allow entries,
 ```yaml
 clientGroupsBlock:
   default: [ads, canary]
-  192.168.1.50: [canary]
+  192.0.2.50: [canary]
 ```
 
 This works because the load balancer keeps the client's own address. Blocky cannot match a hardware address, and a client without a name from
