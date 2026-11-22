@@ -1,0 +1,9 @@
+---
+# Node label the design tool's pods require (registered here so a re-registered node keeps it).
+agent_config_yaml: |
+  pause-image: "{{ k3s_pause_image }}"
+  node-label:
+    - homelab.io/node-class=pi
+    - homelab.io/penpot=true
+  node-taint:
+    - homelab.io/pi=true:NoSchedule
