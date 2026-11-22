@@ -1,0 +1,261 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: penpot
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+# Frontend: ingress on 8080 from the `ingress` entity and the exporter; egress to the backend, the exporter, the object store and
+# three font and template hosts on 443.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-frontend
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-frontend
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-exporter
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-backend
+      toPorts:
+        - ports:
+            - port: "6060"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-exporter
+      toPorts:
+        - ports:
+            - port: "6061"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: garage
+            app.kubernetes.io/name: garage
+      toPorts:
+        - ports:
+            - port: "3900"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: fonts.googleapis.com
+        - matchName: fonts.gstatic.com
+        - matchName: raw.githubusercontent.com
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-backend
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-backend
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-frontend
+      toPorts:
+        - ports:
+            - port: "6060"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            cnpg.io/cluster: penpot-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-valkey
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: garage
+            app.kubernetes.io/name: garage
+      toPorts:
+        - ports:
+            - port: "3900"
+              protocol: TCP
+    - toFQDNs:
+        - matchName: auth.chill-town.de
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-exporter
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-exporter
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-frontend
+      toPorts:
+        - ports:
+            - port: "6061"
+              protocol: TCP
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-frontend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-valkey
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-valkey
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-valkey
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-backend
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-exporter
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-db
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: penpot-db
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-backend
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            app.kubernetes.io/name: penpot-pg-dump
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: penpot-pg-dump
+  namespace: penpot
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-pg-dump
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: penpot
+            cnpg.io/cluster: penpot-db
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

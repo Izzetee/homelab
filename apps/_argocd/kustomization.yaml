@@ -36,5 +36,6 @@ resources:
   - juraticker.yaml
   - agentgateway.yaml
   - wiki.yaml
+  - penpot.yaml
   - blocky.yaml
   - hl-access.yaml

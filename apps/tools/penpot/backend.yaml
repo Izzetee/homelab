@@ -1,0 +1,159 @@
+# The API (sign-in, files, store access). The JVM heap is capped below the memory limit.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-backend
+  namespace: penpot
+  labels:
+    app.kubernetes.io/name: penpot-backend
+    app.kubernetes.io/part-of: penpot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: penpot-backend
+        app.kubernetes.io/part-of: penpot
+    spec:
+      automountServiceAccountToken: false
+      # Placement: nodes with the label homelab.io/penpot=true (link not wifi, host not pi4-1); pod affinity on part-of=penpot keeps the pods on one node.
+      tolerations:
+        - key: homelab.io/pi
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: homelab.io/penpot
+                    operator: In
+                    values: ["true"]
+                  - key: homelab.io/link
+                    operator: NotIn
+                    values: [wifi]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [pi4-1]
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: penpot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: docker.io/penpotapp/backend:2.19.3@sha256:31ebb4dabd104c2ed3ae736dcf5a6043a0660ddaac7bcd8501c28036fb4b578c
+          env:
+            - name: HOME
+              value: "/tmp"
+            - name: PENPOT_PUBLIC_URI
+              value: "https://penpot.chill-town.de"
+            - name: PENPOT_FLAGS
+              value: "enable-login-with-oidc enable-oidc-registration disable-registration disable-login-with-password disable-email-verification disable-admin-console disable-telemetry"
+            - name: JAVA_OPTS
+              value: "-Xms256m -Xmx768m"
+            - name: PENPOT_TELEMETRY_ENABLED
+              value: "false"
+            - name: PENPOT_REDIS_URI
+              value: "redis://penpot-valkey.penpot.svc.cluster.local:6379/0"
+            - name: PENPOT_DATABASE_URI
+              value: "postgresql://penpot-db-rw.penpot.svc.cluster.local:5432/penpot"
+            - name: PENPOT_DATABASE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-db-app
+                  key: username
+            - name: PENPOT_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-db-app
+                  key: password
+            - name: PENPOT_OBJECTS_STORAGE_BACKEND
+              value: "s3"
+            - name: PENPOT_OBJECTS_STORAGE_S3_ENDPOINT
+              value: "http://garage.garage.svc.cluster.local:3900"
+            - name: PENPOT_OBJECTS_STORAGE_S3_BUCKET
+              value: "penpot"
+            - name: PENPOT_OBJECTS_STORAGE_S3_REGION
+              value: "garage"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-s3
+                  key: access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-s3
+                  key: secret-access-key
+            - name: PENPOT_OIDC_BASE_URI
+              value: "https://auth.chill-town.de/application/o/penpot/"
+            - name: PENPOT_OIDC_CLIENT_ID
+              value: "penpot"
+            - name: PENPOT_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-oidc
+                  key: client-secret
+            - name: PENPOT_OIDC_SCOPES
+              value: "openid profile email"
+            - name: PENPOT_OIDC_ROLES
+              value: "penpot-users"
+            - name: PENPOT_OIDC_ROLES_ATTR
+              value: "groups"
+            - name: PENPOT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: penpot-app
+                  key: secret-key
+          ports:
+            - name: http
+              containerPort: 6060
+          # the migrations run at start: up to ten minutes
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

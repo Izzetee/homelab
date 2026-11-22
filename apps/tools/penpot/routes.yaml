@@ -1,0 +1,27 @@
+# The public name: the DNS opt-in, the `tunnel` listener, an X-Forwarded-Proto filter and no request timeout.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: penpot
+  namespace: penpot
+  annotations:
+    homelab.io/public-dns: "true"
+spec:
+  parentRefs:
+    - name: homelab-tunnel
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - penpot.chill-town.de
+  rules:
+    - timeouts:
+        request: 0s
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Proto
+                value: https
+      backendRefs:
+        - name: penpot-frontend
+          port: 8080

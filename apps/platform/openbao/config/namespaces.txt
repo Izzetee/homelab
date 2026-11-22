@@ -10,4 +10,5 @@ hubble-ui
 juraticker
 monitoring
 open-webui
+penpot
 wiki

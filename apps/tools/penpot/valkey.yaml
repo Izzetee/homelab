@@ -1,0 +1,89 @@
+# Cache and message bus of the design tool (no snapshot, no append-only file).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: penpot-valkey
+  namespace: penpot
+  labels:
+    app.kubernetes.io/name: penpot-valkey
+    app.kubernetes.io/part-of: penpot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: penpot-valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: penpot-valkey
+        app.kubernetes.io/part-of: penpot
+    spec:
+      automountServiceAccountToken: false
+      # Placement: nodes with the label homelab.io/penpot=true (link not wifi, host not pi4-1); pod affinity on part-of=penpot keeps the pods on one node.
+      tolerations:
+        - key: homelab.io/pi
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: homelab.io/penpot
+                    operator: In
+                    values: ["true"]
+                  - key: homelab.io/link
+                    operator: NotIn
+                    values: [wifi]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: [pi4-1]
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: penpot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: docker.io/valkey/valkey:9.2.0-alpine@sha256:c8e2d17498838af5d91e12eb7c11220b3434a7b7131a333e3af52ad5e0b80882
+          command: ["valkey-server", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lfu", "--save", "", "--appendonly", "no"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 192Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
