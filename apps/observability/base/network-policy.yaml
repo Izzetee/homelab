@@ -48,7 +48,8 @@ spec:
 ---
 # Prometheus reaches the cluster (all scrape targets, service discovery, Alertmanager, DNS), the API server and the Home
 # Assistant metrics port; nothing else. A selected egress policy turns on default-deny for this pod only. The one ingress rule lets the
-# API server's service proxy read the Prometheus (TCP 9090, from the kube-apiserver entity only; the read-only team identity's proxy read).
+# API server's service proxy read the Prometheus (TCP 9090 only). The proxied request arrives from the host of the control-plane node, which
+# Cilium labels `remote-node` (the `kube-apiserver` entity does not match it here); the other node hosts are the cluster's own machines.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -60,7 +61,7 @@ spec:
       app.kubernetes.io/name: prometheus
   ingress:
     - fromEntities:
-        - kube-apiserver
+        - remote-node
       toPorts:
         - ports:
             - port: "9090"
