@@ -1,0 +1,29 @@
+# Lets the read-only identity read alerts and metrics: GET through the API server's service proxy on exactly the Prometheus and the Alertmanager
+# Service (resource names are <service>:<port>, as the proxy path names them). GET only: no silence, no reload, no query-time write; no other
+# Service, no pod or node proxy. The ClusterRole hl-reader (rbac.yaml) stays free of every subresource.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hl-reader-obs
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames:
+      - kube-prometheus-stack-prometheus:9090
+      - kube-prometheus-stack-alertmanager:9093
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-reader-obs
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hl-reader-obs
+subjects:
+  - kind: ServiceAccount
+    name: hl-reader
+    namespace: hl-access

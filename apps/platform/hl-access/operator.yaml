@@ -116,3 +116,31 @@ subjects:
   - kind: ServiceAccount
     name: hl-operator
     namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-operator
+  namespace: garage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-operator
+subjects:
+  - kind: ServiceAccount
+    name: hl-operator
+    namespace: hl-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-operator
+  namespace: openbao
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-operator
+subjects:
+  - kind: ServiceAccount
+    name: hl-operator
+    namespace: hl-access
