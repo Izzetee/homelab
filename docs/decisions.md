@@ -15,4 +15,4 @@ One line each: what was decided and why.
 - **Raspberry Pis are agents** with a node-class label and taint; images are multi-arch or pinned to one architecture. Why: mixed architecture must be explicit.
 - **Renovate** for images, charts, collections and providers, no automerge of guardrail files, collections or providers. Why: reviewable updates without a self-hosted updater.
 - **Garage as the S3 store**: one node, keys created in the secret store first. Why: small footprint, native metrics, keys importable from the store.
-- **Publishing through one door** that checks every push and merges only inside one application directory; the owner merges everything else. Why: an agent's mistake or an injected instruction must not reach the platform.
+- **Publishing through one door** that checks every push and merges only inside one application directory; the owner merges everything else, except a pull request his go names as `#<n> @ <40-hex reviewed head>`: that one is merged bound to exactly that head. Why: an agent's mistake or an injected instruction must not reach the platform.

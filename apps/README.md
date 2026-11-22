@@ -69,8 +69,8 @@ as destinations):
 - Values files live next to the Application name (`observability/<application>/values.yaml`); every image is `tag@digest`.
 - Grafana is stateless: datasources and dashboards come from this repository (ConfigMaps with the label `grafana_dashboard`),
   edits in the UI are lost on a restart. It is served at `grafana.lan.chill-town.de` through the `lan` listener of the gateway. Its admin
-  account and the Alertmanager Discord webhook come from the bootstrap Secrets `grafana-admin` and `alertmanager-receiver`
-  (see `ansible/`); Alertmanager reads the webhook URL from a file of that Secret.
+  account and the Alertmanager Discord webhook come from the Secrets `grafana-admin` and `alertmanager-receiver`, which `ExternalSecret`s in
+  `observability/base/` fill from the store (see "Secret store"); Alertmanager reads the webhook URL from a file of that Secret.
 - The NAS is scraped over SNMPv3 through the SNMP exporter (job `nas`, one 60 s scrape); its user and passwords are environment variables
   of the exporter from the Secret `nas-snmp` (the config holds only `${…}` markers). Home Assistant's metrics endpoint is scraped
   with a bearer token from the Secret `home-assistant-token` (job `home-assistant`); the token is the Home Assistant user's own long-lived
@@ -90,7 +90,7 @@ Removing the observability stack. Work from the top while ArgoCD still runs, so 
    with it); `observability-base` (the namespaces and the volumes in them go with it).
 3. Merge a revert of the change that added the Applications and the AppProject; delete the AppProject by hand if it stays behind
    (the `argocd` Application does not prune).
-4. Delete the bootstrap Secrets `grafana-admin` and `alertmanager-receiver` if their namespace still exists, then restore the
+4. Delete the Secrets that the `ExternalSecret`s of `observability/base/` keep with `creationPolicy: Orphan` if their namespace still exists, then restore the
    sync policy of the root (`apps/root.yaml`) and check that every remaining Application is `Synced` and `Healthy`.
 
 ## Secret store
