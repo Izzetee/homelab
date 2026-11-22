@@ -20,7 +20,7 @@ ansible-galaxy collection install -r ansible/requirements.yml
 
 The agents are in their own inventory group, so the first `k3s-cluster` run is limited to the server
 (`--limit server`). The Raspberry Pi agents (arm64) are the group `pi` inside `agent`: they register with the label
-`homelab.io/node-class=pi` and the taint `homelab.io/pi=true:NoSchedule` (`pi4-4` also carries `homelab.io/link=wifi`),
+`homelab.io/node-class=pi` and the taint `homelab.io/pi=true:NoSchedule` (`pi4-4` also carries `homelab.io/link=wifi`; `pi4-3` and `pi4-5` carry `homelab.io/penpot=true`, set in their host variables),
 and run with their own `--limit <host>`; the arm64 K3s binary has its own pinned checksum.
 
 K3s upgrade: `node-prep` stops while `node_prep_cri_apparmor_k3s_version` differs from `k3s_version`. Compare `contrib/apparmor/template.go` of the new
