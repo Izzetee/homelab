@@ -116,6 +116,20 @@ subjects:
     name: hl-admin-jit
     namespace: hl-access
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hl-admin-jit
+  namespace: penpot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hl-admin-jit
+subjects:
+  - kind: ServiceAccount
+    name: hl-admin-jit
+    namespace: hl-access
+---
 # The operator may request tokens for this one ServiceAccount and no other.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
