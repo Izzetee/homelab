@@ -4,6 +4,7 @@ resources:
   - namespace.yaml
   - rbac.yaml
   - token.yaml
+  - reader-obs.yaml
   - operator.yaml
   - operator-policy.yaml
   - operator-token.yaml

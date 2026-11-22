@@ -1,6 +1,7 @@
 # Cluster-wide operating rights of the short-lived admin hl-admin-jit (jit-admin.yaml), used only through tokens of at most one hour:
 # read and delete pods, read their logs, restart workloads (patch; limited to the restart annotation by the policy below), and start a Job
-# from a CronJob (create; limited to an unaltered copy of a backup CronJob by operator-policy.yaml, outside the six application namespaces).
+# from a CronJob (create; limited to an unaltered copy of a backup CronJob by operator-policy.yaml, outside the six application namespaces), and
+# set or remove homelab.io/ labels on Nodes (patch; limited to those labels by node-labels.yaml, which must exist before this rule).
 # No Secret API access, no exec outside the six application namespaces, no RBAC, admission, CRD, Namespace, volume or Service writes,
 # no Deployment, DaemonSet or StatefulSet create, delete or scale.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -23,6 +24,9 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "patch"]
 ---
 # The only change this identity may make to a Deployment, DaemonSet or StatefulSet: the restart annotation of the pod template (what
 # kubectl rollout restart patches). Everything else, including replicas and the pod template itself, must stay equal to the stored object.
