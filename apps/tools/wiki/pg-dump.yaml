@@ -67,7 +67,8 @@ spec:
                   (cd /data && xargs -0 -r sha256sum <"$list") | sed 's|^\([0-9a-f]\{64\}\)  \./|\1  |' >"$stamp.files.sha256"
                   ok=1
                   if [ "$manual" = 1 ]; then
-                    [ "$(LC_ALL=C ls -1A)" = "$(printf '%s\n' "$before" "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
+                    after=$(LC_ALL=C ls -1A)
+                    [ "$after" = "$(printf '%s\n' "$before" "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
                   printf %s "$stamp" >/dev/termination-log
                   if [ "$manual" = 0 ]; then
