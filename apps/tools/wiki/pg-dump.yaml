@@ -46,7 +46,15 @@ spec:
                 - |
                   umask 077
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
                   cd /backup
+                  host=$(cat /etc/hostname); manual=0; case "$host" in *-manual-*) manual=1 ;; esac
+                  if [ "$manual" = 1 ]; then
+                    for f in "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256"; do
+                      if [ -e "$f" ] || [ -L "$f" ]; then echo "manual run: $f already exists" >&2; exit 1; fi
+                    done
+                    before=$(LC_ALL=C ls -1A)
+                  fi
                   # a set is only kept when every file of it was written completely: any failure below removes this stamp's files
                   ok=0
                   trap '[ "$ok" = 1 ] || rm -f "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256"' EXIT
@@ -58,8 +66,13 @@ spec:
                   nfiles=$(tr -cd '\0' <"$list" | wc -c | tr -d ' ')
                   (cd /data && xargs -0 -r sha256sum <"$list") | sed 's|^\([0-9a-f]\{64\}\)  \./|\1  |' >"$stamp.files.sha256"
                   ok=1
+                  if [ "$manual" = 1 ]; then
+                    [ "$(LC_ALL=C ls -1A)" = "$(printf '%s\n' "$before" "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
+                  fi
                   printf %s "$stamp" >/dev/termination-log
-                  ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
+                  if [ "$manual" = 0 ]; then
+                    ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
+                  fi
                   # names as users upload them (spaces, Unicode, quotes) are fine; a control character or a backslash is not (the pull and the restore refuse them too)
                   bad=$({ grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$stamp.files.sha256" || true; })
                   lines=$(wc -l <"$stamp.files.sha256" | tr -d ' ')
