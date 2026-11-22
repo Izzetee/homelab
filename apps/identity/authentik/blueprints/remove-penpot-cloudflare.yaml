@@ -1,0 +1,18 @@
+# Removes exactly what blueprints/penpot-cloudflare.yaml declared: the application, the provider and the group, each identified by its exact
+# slug or name; nothing else is named or changed.
+version: 1
+metadata:
+  name: homelab-remove-penpot-cloudflare
+entries:
+  - model: authentik_core.application
+    state: absent
+    identifiers:
+      slug: penpot-cloudflare
+  - model: authentik_providers_oauth2.oauth2provider
+    state: absent
+    identifiers:
+      name: penpot-cloudflare
+  - model: authentik_core.group
+    state: absent
+    identifiers:
+      name: penpot-users
