@@ -51,7 +51,7 @@ spec:
                   new = {f"{base}.{e}" for e in ("db.gz", "tar.gz", "db.gz.sha256", "tar.gz.sha256")}
                   if manual:
                       before = set(os.listdir(OUT))
-                      if before & (new | {f".{base}.db"}):
+                      if before & (new | {f".{base}.db{x}" for x in ("", "-journal", "-wal", "-shm")}):
                           raise SystemExit("manual run: a file of this set name already exists")
                   src = sqlite3.connect(f"file:{DATA}/{DB}?mode=ro", uri=True)
                   dst = sqlite3.connect(tmp)

@@ -53,7 +53,8 @@ spec:
                   pg_dump -Fc -h juraticker-db18-r -U juraticker -d juraticker -f "/backup/juraticker-$stamp.dump"
                   (cd /backup && sha256sum "juraticker-$stamp.dump" >"juraticker-$stamp.dump.sha256")
                   if [ "$manual" = 1 ]; then
-                    [ "$(LC_ALL=C ls -1A /backup)" = "$(printf '%s\n' "$before" "juraticker-$stamp.dump" "juraticker-$stamp.dump.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
+                    after=$(LC_ALL=C ls -1A /backup)
+                    [ "$after" = "$(printf '%s\n' "$before" "juraticker-$stamp.dump" "juraticker-$stamp.dump.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
                   printf %s "juraticker-$stamp" >/dev/termination-log
                   cd /backup
