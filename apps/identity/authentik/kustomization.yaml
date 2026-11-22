@@ -17,6 +17,7 @@ configMapGenerator:
       - blueprints/openbao.yaml
       - blueprints/openbao-ui.yaml
       - blueprints/outline.yaml
+      - blueprints/penpot-cloudflare.yaml
       - blueprints/remove-legacy-grafana.yaml
 generatorOptions:
   disableNameSuffixHash: true

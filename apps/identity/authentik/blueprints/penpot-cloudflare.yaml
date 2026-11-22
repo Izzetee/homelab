@@ -1,0 +1,52 @@
+# OIDC client of the edge login (Cloudflare Access) in front of the Penpot hostname, and the group that may use it (declared here, never by
+# the admin UI). The client secret is read from the environment of the worker, which takes it from the store path of this client. The
+# redirect URI is exact (strict matching). The application is bound to the group, so only its members are admitted. Members cannot change
+# their own e-mail address (the sign-in identity is the e-mail); the group carries no members, roles, parent or superuser flag.
+version: 1
+metadata:
+  name: homelab-oidc-penpot-cloudflare
+entries:
+  - model: authentik_core.group
+    id: group
+    state: present
+    identifiers:
+      name: penpot-users
+    attrs:
+      attributes:
+        goauthentik.io/user/can-change-email: false
+  - model: authentik_providers_oauth2.oauth2provider
+    id: provider
+    state: present
+    identifiers:
+      name: penpot-cloudflare
+    attrs:
+      client_type: confidential
+      client_id: penpot-cloudflare
+      grant_types:
+        - authorization_code
+      client_secret:
+        !Env AUTHENTIK_OIDC_PENPOT_CLOUDFLARE_SECRET
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      redirect_uris:
+        - matching_mode: strict
+          url: https://poecki.cloudflareaccess.com/cdn-cgi/access/callback
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+  - model: authentik_core.application
+    id: application
+    state: present
+    identifiers:
+      slug: penpot-cloudflare
+    attrs:
+      name: Penpot edge login
+      provider: !KeyOf provider
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !KeyOf application
+      group: !KeyOf group
+      order: 0
