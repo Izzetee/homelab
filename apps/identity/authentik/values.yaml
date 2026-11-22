@@ -147,8 +147,3 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: penpot-cloudflare
-    - name: AUTHENTIK_OIDC_PENPOT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: authentik-oidc-clients
-          key: penpot

@@ -1,0 +1,14 @@
+# Removes the provider and the application named `penpot` that penpot.yaml adds. Exactly these two objects, identified by their exact slug
+# and name; the policy binding goes with the application, and nothing else is named or changed (the group and the edge login client stay).
+version: 1
+metadata:
+  name: homelab-remove-penpot
+entries:
+  - model: authentik_core.application
+    state: absent
+    identifiers:
+      slug: penpot
+  - model: authentik_providers_oauth2.oauth2provider
+    state: absent
+    identifiers:
+      name: penpot
