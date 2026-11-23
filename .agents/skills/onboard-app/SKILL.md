@@ -43,6 +43,6 @@ One pull request. A new application is not merged through the door's application
 
 ## Rollback
 
-Revert the pull request. A pure `git revert` of exactly the commits the go merged is covered by that go (skill `publish`); any other rollback needs a new go. The store value stays as a create-only value; removing it is the owner's.
+Revert the pull request. A pure `git revert` of exactly the commits the go merged is covered by that go (skill `publish`); any other rollback needs a new go. The store value stays as a create-only value; removing it is the owner's. Removing an app is skill `offboard-app`.
 
 Then write the changelog entry (skill `wiki-changelog`).
