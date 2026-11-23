@@ -5,6 +5,5 @@ table with one row in a CloudNativePG cluster, one object in its own Garage buck
 identity-provider client that nothing uses. Nothing here is real data and nothing depends on it; the whole directory is removed by the
 rehearsal itself.
 
-- LAN name `offboard-test.lan.chill-town.de`; a second route for `offboard-test.chill-town.de` that stays unattached until the namespace
-  carries the public label.
+- LAN name `offboard-test.lan.chill-town.de`; a second route for `offboard-test.chill-town.de` through the tunnel, behind an access policy.
 - Secret values live in the store; the pods read them through `ExternalSecret` objects.
