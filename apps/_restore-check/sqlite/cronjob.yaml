@@ -1,0 +1,416 @@
+# Restore check of the SQLite backup sets of an application (shared by every application whose backup CronJob writes
+# `<name>-<UTC>.db.gz` and `.tar.gz` with a `.sha256` each). Fields of the application come from the backup hook's source (namespace, name, image,
+# claim, node selector, the backup's user) and from its ConfigMap `restore-check` (set prefix, tables, extra file, schedule) by the
+# replacements of kustomization.yml.
+#
+# Per class (the claim root: scheduled and manual sets; `.presync`: hook sets) the newest complete set of exactly the expected names, its
+# age and checksum files; each file of the set is read once, into a private scratch copy whose checksum is verified (the claim's file is
+# never read again); then the database is decompressed into scratch (gzip checksum and length checked), opened and checked (integrity,
+# expected tables, row counts, one table that must hold rows), and the file archive is decompressed and its regular files and directories
+# are extracted into scratch (links and other members are counted, never extracted) and the extra file is checked. A newest set that is
+# incomplete (and older than the grace time) or damaged fails the check; an older set is never used instead. The claim is mounted read-only;
+# scratch is emptied after each class, also on failure.
+# Output: fixed `OK`/`FAIL`/`RESULT` lines with counts and set names only; nothing of the data, no file name, no error text.
+# Termination message of the restore (`restore` container; the select step's has the two set ids only): `nightly=<set> presync=<set|none> rows-nightly=<n> rows-presync=<n|none>`,
+# the two set ids and one validated row total per class, database rows only (no file, sidecar or asset count); `FAIL <phase> <class>` on failure.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sqlite-restore-check # <backup cronjob>-restore-check
+  labels:
+    homelab.io/restore-check: "true"
+spec:
+  schedule: placeholder # from the ConfigMap
+  timeZone: Etc/UTC
+  startingDeadlineSeconds: 21600
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        homelab.io/restore-check: "true"
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: restore-check
+            homelab.io/restore-check: "true"
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector: {} # from the hook source
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1 # the backup's user, from the hook source
+            runAsGroup: 1 # the backup's group, from the hook source
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore
+              image: placeholder # from the hook source
+              command: ["python3", "-I", "-c"]
+              args:
+                - |
+                  import calendar, gzip, hashlib, json, os, re, shutil, signal, sqlite3, stat, sys, tarfile, time
+                  # every library's own output is data: stdout and stderr go nowhere, only say() writes the fixed lines
+                  OUT = os.dup(1)
+                  _null = os.open(os.devnull, os.O_RDWR)
+                  for _fd in (0, 1, 2):
+                      os.dup2(_null, _fd)
+                  os.umask(0o077)
+                  BACKUP, SCRATCH = "/backup", "/scratch"
+                  EXTS = ("db.gz", "db.gz.sha256", "tar.gz", "tar.gz.sha256")
+                  st = {"phase": "config", "cls": "-"}
+
+
+                  class Fail(Exception):
+                      pass
+
+
+                  def say(*parts):
+                      os.write(OUT, (" ".join(str(p) for p in parts) + "\n").encode())
+
+
+                  def fail(phase):
+                      st["phase"] = phase
+                      raise Fail()
+
+
+                  def phase(name):
+                      st["phase"] = name
+
+
+                  def num(name, lo, hi):
+                      v = os.environ.get(name, "")
+                      if not re.fullmatch(r"[0-9]{1,9}", v) or not lo <= int(v) <= hi:
+                          fail("config")
+                      return int(v)
+
+
+                  def sigterm(*_):
+                      raise SystemExit(143)
+
+
+                  signal.signal(signal.SIGTERM, sigterm)
+
+
+                  def regular(path):
+                      try:
+                          m = os.lstat(path).st_mode
+                      except FileNotFoundError:
+                          return False
+                      if not stat.S_ISREG(m):
+                          fail("layout")
+                      return True
+
+
+                  def pick(c, d, required):
+                      """newest complete set of a class: (set, stamp time) or None"""
+                      st["cls"] = c
+                      phase("select")
+                      if os.path.islink(d):
+                          fail("layout")
+                      if not os.path.isdir(d):
+                          # truly absent: no set; any other entry that is not a directory is a layout failure
+                          if os.path.lexists(d):
+                              fail("layout")
+                          if required:
+                              fail("noset")
+                          return None
+                      pat = re.compile(re.escape(PREFIX) + r"([0-9]{8}T[0-9]{6}Z)\.(db\.gz|db\.gz\.sha256|tar\.gz|tar\.gz\.sha256)")
+                      stamps = sorted({m.group(1) for n in os.listdir(d) if (m := pat.fullmatch(n))}, reverse=True)
+                      for s in stamps:
+                          ts = calendar.timegm(time.strptime(s, "%Y%m%dT%H%M%SZ"))
+                          have = sum(regular(f"{d}/{PREFIX}{s}.{e}") for e in EXTS)
+                          if have == len(EXTS):
+                              return PREFIX + s, ts
+                          # a set that is still being written is skipped; any other incomplete newest set is a failure
+                          if NOW - ts < GRACE:
+                              continue
+                          fail("incomplete")
+                      if required:
+                          fail("noset")
+                      return None
+
+
+                  def expected(d, name):
+                      """the checksum the set's sum file names for one of its files"""
+                      phase("sumfile")
+                      p = f"{d}/{name}"
+                      if os.lstat(p + ".sha256").st_size > 64 + 2 + len(name) + 1:
+                          fail("sumfile")
+                      fd = os.open(p + ".sha256", os.O_RDONLY | os.O_NOFOLLOW)
+                      with os.fdopen(fd, "rb") as f:
+                          data = f.read()
+                      m = re.fullmatch(rb"([0-9a-f]{64})  " + re.escape(name.encode()) + rb"\n", data)
+                      if not m:
+                          fail("sumfile")
+                      return m.group(1).decode()
+
+
+                  def fetch(src, dst, want, used):
+                      """reads a set file once into a private scratch copy, hashing the bytes it copies; only a verified copy is used"""
+                      phase("checksum")
+                      budget = free(used)
+                      h, n = hashlib.sha256(), 0
+                      fd = os.open(src, os.O_RDONLY | os.O_NOFOLLOW)
+                      with os.fdopen(fd, "rb") as f, os.fdopen(os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "wb") as o:
+                          while chunk := f.read(1 << 20):
+                              n += len(chunk)
+                              if n > budget:
+                                  fail("space")
+                              h.update(chunk)
+                              o.write(chunk)
+                      if h.hexdigest() != want:
+                          fail("checksum")
+                      return n
+
+
+                  def wipe(p):
+                      """removes a scratch tree, also one whose extracted directories lack the owner's write bit"""
+                      if os.path.isdir(p) and not os.path.islink(p):
+                          os.chmod(p, 0o700)
+                          for root, dirs, _ in os.walk(p):
+                              for x in dirs:
+                                  if not os.path.islink(os.path.join(root, x)):
+                                      os.chmod(os.path.join(root, x), 0o700)
+                          shutil.rmtree(p)
+                      elif os.path.lexists(p):
+                          os.remove(p)
+
+
+                  def free(used):
+                      s = os.statvfs(SCRATCH)
+                      return min(CAP - used, s.f_bavail * s.f_frsize - (64 << 20))
+
+
+                  def gunzip(src, dst, used):
+                      """decompresses with the gzip checksum and length checks, within the scratch budget; returns the size"""
+                      budget = free(used)
+                      phase("gzip")
+                      # the length in the gzip trailer is not trusted before the checksum: the cap is enforced while decompressing
+                      with open(src, "rb") as f:
+                          n = 0
+                          with gzip.GzipFile(fileobj=f) as g, open(dst, "xb") as o:
+                              while chunk := g.read(1 << 20):
+                                  n += len(chunk)
+                                  if n > budget:
+                                      fail("space")
+                                  o.write(chunk)
+                      return n
+
+
+                  def sqlite_check(path, kind):
+                      phase("sqlite")
+                      con = sqlite3.connect(path)
+                      try:
+                          if con.execute("pragma integrity_check").fetchall() != [("ok",)]:
+                              fail("sqlite")
+                          names = {r[0] for r in con.execute("select name from sqlite_master where type = 'table'")}
+                          if not names:
+                              fail("tables")
+                          counts = {}
+                          if kind == "db":
+                              for t in TABLES:
+                                  if t not in names:
+                                      fail("tables")
+                                  counts[t] = con.execute(f'select count(*) from "{t}"').fetchone()[0]
+                              if KNOWN:
+                                  if KNOWN not in names:
+                                      fail("tables")
+                                  if con.execute(f'select exists (select 1 from "{KNOWN}")').fetchone()[0] != 1:
+                                      fail("known")
+                          return len(names), counts
+                      finally:
+                          con.close()
+
+
+                  def safe(name):
+                      parts = name.split("/")
+                      return (not name.startswith("/") and len(name) < 4096 and all(p not in ("", ".", "..") for p in parts)
+                              and not any(ord(ch) < 32 or ord(ch) == 127 or ch == "\\" for ch in name))
+
+
+                  def extract(tarpath, dest, used):
+                      phase("tar")
+                      members, skipped, size = [], 0, 0
+                      with tarfile.open(tarpath, "r:") as t:
+                          for m in t:
+                              if len(members) + skipped >= MAX_MEMBERS or not safe(m.name):
+                                  fail("tar")
+                              if m.isreg() or m.isdir():
+                                  members.append(m)
+                                  size += m.size
+                              else:
+                                  skipped += 1
+                          if size > free(used):
+                              fail("space")
+                          os.mkdir(dest, 0o700)
+                          t.extractall(dest, members=members, filter="data")
+                      files = sum(1 for m in members if m.isreg())
+                      return files, len(members) - files, skipped, size
+
+
+                  def extra(dest):
+                      phase("extra")
+                      if EXTRA == "n8n-config":
+                          p = f"{dest}/config"
+                          if not regular(p) or os.lstat(p).st_size > 65536:
+                              fail("extra")
+                          with open(p, "rb") as f:
+                              doc = json.loads(f.read())
+                          if not isinstance(doc, dict) or not isinstance(doc.get("encryptionKey"), str) or not doc["encryptionKey"]:
+                              fail("extra")
+                          say("OK extra", st["cls"], "config=1")
+                      elif EXTRA == "chroma":
+                          p = f"{dest}/vector_db/chroma.sqlite3"
+                          if not regular(p):
+                              fail("extra")
+                          n, _ = sqlite_check(p, "extra")
+                          say("OK extra", st["cls"], f"vector-tables={n}")
+
+
+                  def check(c, d, required):
+                      got = pick(c, d, required)
+                      if got is None:
+                          say("OK select", c, "none=1")
+                          return "none", "none"
+                      name, ts = got
+                      if required:
+                          if ts > NOW + 600:
+                              fail("future")
+                          if NOW - ts > MAX_AGE:
+                              fail("stale")
+                      want = {e: expected(d, f"{name}.{e}") for e in ("db.gz", "tar.gz")}
+                      say("OK select", c, f"set={name}", f"age-hours={(NOW - ts) // 3600}")
+                      work = f"{SCRATCH}/{c}"
+                      phase("scratch")
+                      os.mkdir(work, 0o700)
+                      try:
+                          z = fetch(f"{d}/{name}.db.gz", f"{work}/db.gz", want["db.gz"], 0)
+                          db = gunzip(f"{work}/db.gz", f"{work}/db", z)
+                          os.remove(f"{work}/db.gz")
+                          tables, counts = sqlite_check(f"{work}/db", "db")
+                          say("OK database", c, f"tables={tables}", f"bytes={db}")
+                          for t, n in counts.items():
+                              say("OK rows", c, f"{t}={n}")
+                          if KNOWN:
+                              say("OK known", c, f"{KNOWN}=yes")
+                          z = fetch(f"{d}/{name}.tar.gz", f"{work}/files.tar.gz", want["tar.gz"], db)
+                          tar = gunzip(f"{work}/files.tar.gz", f"{work}/files.tar", db + z)
+                          os.remove(f"{work}/files.tar.gz")
+                          files, dirs, skipped, size = extract(f"{work}/files.tar", f"{work}/files", db + tar)
+                          say("OK files", c, f"files={files}", f"dirs={dirs}", f"skipped={skipped}", f"bytes={size}")
+                          extra(f"{work}/files")
+                      finally:
+                          phase_now = st["phase"]
+                          phase("cleanup")
+                          wipe(work)
+                          st["phase"] = phase_now
+                      total = sum(counts.values())  # rows of the listed tables only; files are not counted
+                      if not 0 <= total < 10**15:
+                          fail("rows")
+                      return name, str(total)
+
+
+                  def main():
+                      global PREFIX, TABLES, KNOWN, EXTRA, MAX_AGE, GRACE, CAP, MAX_MEMBERS, NOW
+                      PREFIX = os.environ.get("RC_PREFIX", "")
+                      TABLES = [t for t in os.environ.get("RC_TABLES", "").split(",") if t]
+                      KNOWN = os.environ.get("RC_KNOWN", "")
+                      EXTRA = os.environ.get("RC_EXTRA", "none")
+                      if not re.fullmatch(r"([a-z0-9][a-z0-9-]{0,40}-)?", PREFIX) or EXTRA not in ("none", "n8n-config", "chroma"):
+                          fail("config")
+                      if not all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", t) for t in TABLES + ([KNOWN] if KNOWN else [])):
+                          fail("config")
+                      MAX_AGE = num("RC_MAX_AGE_HOURS", 1, 9999) * 3600
+                      GRACE = num("RC_GRACE_SECONDS", 0, 86400)
+                      CAP = num("RC_SCRATCH_MIB", 64, 1 << 20) << 20
+                      MAX_MEMBERS = num("RC_MAX_MEMBERS", 1, 10000000)
+                      NOW = int(time.time())
+                      sets = {}
+                      sets["nightly"], rows_n = check("nightly", BACKUP, True)
+                      sets["presync"], rows_p = check("presync", f"{BACKUP}/.presync", False)
+                      return f"nightly={sets['nightly']} presync={sets['presync']} rows-nightly={rows_n} rows-presync={rows_p}"
+
+
+                  rc = 0
+                  try:
+                      done = main()
+                      st["cls"] = "-"
+                  except BaseException as e:
+                      rc = e.code if isinstance(e, SystemExit) and isinstance(e.code, int) and e.code else 1
+                  # scratch holds nothing after the run, also after a failure in the middle of a class
+                  for entry in os.listdir(SCRATCH) if os.path.isdir(SCRATCH) else []:
+                      try:
+                          wipe(f"{SCRATCH}/{entry}")
+                      except BaseException:
+                          if rc == 0:
+                              st["phase"] = "cleanup"
+                          rc = rc or 1
+                  if rc == 0:
+                      say("RESULT OK restore")
+                      msg = done
+                  else:
+                      say("FAIL", st["phase"], st["cls"])
+                      say("RESULT FAIL restore")
+                      msg = f"FAIL {st['phase']} {st['cls']}"
+                  try:
+                      with open("/dev/termination-log", "w") as f:
+                          f.write(msg)
+                  except OSError:
+                      pass
+                  os._exit(rc)
+              envFrom:
+                - configMapRef:
+                    name: restore-check
+              terminationMessagePolicy: File
+              env:
+                - name: HOME
+                  value: /tmp
+                - name: RC_MAX_AGE_HOURS
+                  value: "50"
+                - name: RC_GRACE_SECONDS
+                  value: "7200"
+                - name: RC_SCRATCH_MIB
+                  value: "3584"
+                - name: RC_MAX_MEMBERS
+                  value: "200000"
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                  ephemeral-storage: 3840Mi # the scratch budget, /tmp and the container's own files
+                limits:
+                  cpu: 1000m
+                  memory: 512Mi
+                  ephemeral-storage: 4608Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+                - name: scratch
+                  mountPath: /scratch
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: placeholder # from the hook source
+                readOnly: true
+            - name: scratch
+              emptyDir:
+                sizeLimit: 4Gi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

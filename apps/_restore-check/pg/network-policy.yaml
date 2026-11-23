@@ -1,0 +1,16 @@
+# The restore check needs no network: every connection to and from its pods is denied.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: restore-check
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: restore-check
+      homelab.io/restore-check: "true"
+  ingressDeny:
+    - fromEntities:
+        - all
+  egressDeny:
+    - toEntities:
+        - all

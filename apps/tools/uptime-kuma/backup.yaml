@@ -41,18 +41,69 @@ spec:
               command: ["python3", "-I", "-c"]
               args:
                 - |
-                  import glob, gzip, hashlib, os, shutil, sqlite3, tarfile, time
+                  import atexit, fcntl, glob, gzip, hashlib, os, shutil, sqlite3, stat, sys, tarfile, time
                   NAME, DB, DATA, OUT = "uptimekuma", "kuma.db", "/data", "/backup"
                   os.umask(0o077)
+                  # scheduled run, manual copy (pod name contains -manual-) or PreSync hook (pod name contains -presync-); one lock on the claim serializes them all
+                  host = open("/etc/hostname").read()
+                  mode = "manual" if "-manual-" in host else "hook" if "-presync-" in host else "scheduled"
+
+
+                  def hook_window():
+                      # a hook refuses to run when its deadline (1800s) plus a margin could reach the reserved window; checked again once the lock is held
+                      s = int(time.time()) % 86400
+                      end = s + 1800 + 300
+                      if (s < 14400 and end >= 3600) or end >= 90000:
+                          print("hook: refused, the run could overlap the reserved window", file=sys.stderr)
+                          raise SystemExit(76)
+
+
+                  if mode == "hook":
+                      hook_window()
+                  # the shared lock file is opened without truncation, and only when it is a plain file (a link or another type is refused)
+                  lock = os.open(f"{OUT}/.partial-lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+                  if not stat.S_ISREG(os.fstat(lock).st_mode):
+                      raise SystemExit("backup: the lock path is not a plain file")
+                  give_up = time.monotonic() + 120
+                  while True:
+                      try:
+                          fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                          break
+                      except BlockingIOError:
+                          if time.monotonic() >= give_up:
+                              print("backup: another run holds the lock", file=sys.stderr)
+                              raise SystemExit(75)
+                          time.sleep(1)
+                  if mode == "hook":
+                      hook_window()
+                      # the hook's sets live in their own sub-directory, created here only, by the process that holds the lock
+                      OUT += "/.presync"
+                      os.makedirs(OUT, mode=0o700, exist_ok=True)
+                      if os.path.islink(OUT) or not os.path.isdir(OUT):
+                          raise SystemExit("hook: the hook directory is not a plain directory")
                   base = f"{NAME}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
                   tmp = f"{OUT}/.{base}.db"
-                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
-                  manual = "-manual-" in open("/etc/hostname").read()
+                  # no mode overwrites or removes an entry of its set name (a leftover or a link included), whatever the clock says; a manual run also fails unless the directory then holds exactly the earlier entries plus its new set
+                  manual = mode == "manual"
                   new = {f"{base}.{e}" for e in ("db.gz", "tar.gz", "db.gz.sha256", "tar.gz.sha256")}
+                  mine = sorted(new | {f".{base}.db{x}" for x in ("", "-journal", "-wal", "-shm")})
+                  for name in mine:
+                      if os.path.lexists(f"{OUT}/{name}"):
+                          raise SystemExit(f"{mode} run: a file of this set name already exists")
                   if manual:
                       before = set(os.listdir(OUT))
-                      if before & (new | {f".{base}.db{x}" for x in ("", "-journal", "-wal", "-shm")}):
-                          raise SystemExit("manual run: a file of this set name already exists")
+                  # a failed run removes the files it made itself (the names above were free), so a partial set never counts as one
+                  complete = False
+
+
+                  def cleanup():
+                      if not complete:
+                          for name in mine:
+                              if os.path.lexists(f"{OUT}/{name}"):
+                                  os.remove(f"{OUT}/{name}")
+
+
+                  atexit.register(cleanup)
                   src = sqlite3.connect(f"file:{DATA}/{DB}?mode=ro", uri=True)
                   dst = sqlite3.connect(tmp)
                   src.backup(dst)
@@ -70,6 +121,7 @@ spec:
                       for entry in sorted(os.listdir(DATA)):
                           if entry not in skip:
                               t.add(os.path.join(DATA, entry), arcname=entry)
+                  # both checksums are written before anything is pruned or reported
                   for ext in ("db.gz", "tar.gz"):
                       path = f"{OUT}/{base}.{ext}"
                       h = hashlib.sha256()
@@ -78,14 +130,16 @@ spec:
                               h.update(chunk)
                       with open(path + ".sha256", "w") as f:
                           f.write(f"{h.hexdigest()}  {base}.{ext}\n")
-                      if not manual:
+                  if manual and set(os.listdir(OUT)) != before | new:
+                      raise SystemExit("manual run: the backup directory is not the earlier entries plus this set")
+                  open("/dev/termination-log", "w").write(base)
+                  complete = True
+                  if not manual:
+                      for ext in ("db.gz", "tar.gz"):
                           for old in sorted(glob.glob(f"{OUT}/{NAME}-*.{ext}"))[:-14]:
                               os.remove(old)
                               if os.path.exists(old + ".sha256"):
                                   os.remove(old + ".sha256")
-                  if manual and set(os.listdir(OUT)) != before | new:
-                      raise SystemExit("manual run: the backup directory is not the earlier entries plus this set")
-                  open("/dev/termination-log", "w").write(base)
                   print(f"backup {base} written")
               resources:
                 requests:

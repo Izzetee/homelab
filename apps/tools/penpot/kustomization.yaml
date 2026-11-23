@@ -12,3 +12,18 @@ resources:
   - pg-dump.yaml
   - routes.yaml
   - network-policy.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/pg
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=30 5 * * 0
+      - RC_PREFIX=penpot-
+      - RC_TABLES=profile,team,file,storage_object
+      - RC_KNOWN=profile
+      - RC_COUNTS=count=file.deleted_at objects=storage_object.deleted_at
+      - RC_ASSETS=objects

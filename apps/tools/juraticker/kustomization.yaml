@@ -18,3 +18,14 @@ images:
   - name: ghcr.io/izzetee/lawnews/frontend
     newTag: 1da7ba15f7d2af70da3483df3515f190b8b7a28a
     digest: sha256:d3f8b26961e049f80c4aafb01ddbcf834ea3b6225dd7bba16236a3f069d97453
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/pg
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=10 5 * * 0
+      - RC_PREFIX=juraticker-

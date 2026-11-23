@@ -40,16 +40,36 @@ spec:
               args:
                 - |
                   umask 077
-                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
-                  cd /backup
-                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
-                  host=$(cat /etc/hostname); manual=0; case "$host" in *-manual-*) manual=1 ;; esac
-                  if [ "$manual" = 1 ]; then
-                    for f in "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"; do
-                      if [ -e "$f" ] || [ -L "$f" ]; then echo "manual run: $f already exists" >&2; exit 1; fi
-                    done
-                    before=$(LC_ALL=C ls -1A)
+                  # scheduled run, manual copy (pod name contains -manual-) or PreSync hook (pod name contains -presync-); one lock on the claim serializes them all
+                  host=$(cat /etc/hostname); mode=scheduled
+                  case "$host" in *-manual-*) mode=manual ;; *-presync-*) mode=hook ;; esac
+                  # a hook refuses to run when its deadline (1800s) plus a margin could reach the reserved window; checked again once the lock is held
+                  hook_window() {
+                    ws=$(( $(date -u +%s) % 86400 )); we=$((ws + 1800 + 300))
+                    if { [ "$ws" -lt 14400 ] && [ "$we" -ge 3600 ]; } || [ "$we" -ge 90000 ]; then echo "hook: refused, the run could overlap the reserved window" >&2; exit 76; fi
+                  }
+                  [ "$mode" != hook ] || hook_window
+                  lk=/backup/.partial-lock
+                  # the shared lock file is opened without truncation, and only when it is a plain file (a link or another type is refused before anything is touched)
+                  if [ -L "$lk" ] || { [ -e "$lk" ] && [ ! -f "$lk" ]; }; then echo "backup: the lock path is not a plain file" >&2; exit 1; fi
+                  exec 9>>"$lk"
+                  flock -w 120 9 || { echo "backup: another run holds the lock" >&2; exit 75; }
+                  [ "$mode" != hook ] || hook_window
+                  out=/backup
+                  # the hook's sets live in their own sub-directory, created here only, by the process that holds the lock
+                  if [ "$mode" = hook ]; then
+                    out=/backup/.presync
+                    mkdir -p -m 0700 "$out"
+                    { [ -d "$out" ] && [ ! -L "$out" ]; } || { echo "hook: the hook directory is not a plain directory" >&2; exit 1; }
                   fi
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  cd "$out"
+                  # no mode overwrites or removes an entry of its set name (a leftover or a link included), whatever the clock says
+                  for f in "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"; do
+                    if [ -e "$out/$f" ] || [ -L "$out/$f" ]; then echo "$mode run: $f already exists" >&2; exit 1; fi
+                  done
+                  # a manual run never removes an older set: it fails unless the directory then holds exactly the earlier entries plus its new set
+                  if [ "$mode" = manual ]; then before=$(LC_ALL=C ls -1A); fi
                   # any failure below removes this stamp's files
                   ok=0
                   trap '[ "$ok" = 1 ] || rm -f "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"' EXIT
@@ -58,14 +78,16 @@ spec:
                   psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from file where deleted_at is null' >"penpot-$stamp.count"
                   psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from storage_object where deleted_at is null' >"penpot-$stamp.objects"
                   ok=1
-                  if [ "$manual" = 1 ]; then
+                  if [ "$mode" = manual ]; then
                     after=$(LC_ALL=C ls -1A)
                     [ "$after" = "$(printf '%s\n' "$before" "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
                   printf %s "penpot-$stamp" >/dev/termination-log
-                  if [ "$manual" = 0 ]; then
-                    ls -1 penpot-*.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.objects"; done
-                  fi
+                  # pruning is skipped for a manual run
+                  case "$mode" in
+                    manual) ;;
+                    *) ls -1 penpot-*.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.objects"; done ;;
+                  esac
                   echo "set penpot-$stamp written"
               env:
                 - name: PGPASSWORD

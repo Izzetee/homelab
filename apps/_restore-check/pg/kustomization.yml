@@ -1,0 +1,95 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Named kustomization.yml on purpose: a component builds only inside an application, never alone. List it after the backup hook component
+# (its fields come from the backup hook component's BackupHookSource) and generate the ConfigMap `restore-check` in the application.
+resources:
+  - cronjob.yaml
+  - network-policy.yaml
+replacements:
+  - source:
+      kind: BackupHookSource
+      fieldPath: metadata.name
+      options:
+        delimiter: -presync
+        index: 0
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - metadata.name
+        options:
+          delimiter: -restore-check
+          index: 0
+  - source:
+      kind: BackupHookSource
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - metadata.namespace
+        options:
+          create: true
+      - select:
+          kind: ConfigMap
+          name: restore-check
+        fieldPaths:
+          - metadata.namespace
+        options:
+          create: true
+      - select:
+          kind: CiliumNetworkPolicy
+          name: restore-check
+        fieldPaths:
+          - metadata.namespace
+        options:
+          create: true
+  - source:
+      kind: ConfigMap
+      name: restore-check
+      fieldPath: data.RC_SCHEDULE
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - spec.schedule
+  - source:
+      kind: BackupHookSource
+      fieldPath: spec.template.spec.containers.0.image
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.initContainers.0.image
+          - spec.jobTemplate.spec.template.spec.containers.0.image
+  - source:
+      kind: BackupHookSource
+      fieldPath: spec.template.spec.nodeSelector
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.nodeSelector
+  - source:
+      kind: BackupHookSource
+      fieldPath: spec.template.spec.volumes.[name=backup].persistentVolumeClaim.claimName
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.volumes.[name=backup].persistentVolumeClaim.claimName
+  - source:
+      kind: BackupHookSource
+      fieldPath: spec.template.spec.securityContext.runAsUser
+    targets:
+      - select:
+          kind: CronJob
+          labelSelector: homelab.io/restore-check=true
+        fieldPaths:
+          - spec.jobTemplate.spec.template.spec.initContainers.0.securityContext.runAsUser

@@ -11,3 +11,17 @@ resources:
   - pg-dump.yaml
   - routes.yaml
   - network-policy.yaml
+components:
+  - ../../_backup-hook/affine
+  - ../../_restore-check/pg
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=0 5 * * 0
+      - RC_PREFIX=affine-
+      - RC_TABLES=users,workspaces
+      - RC_KNOWN=users
+      - RC_EXTENSIONS=vector

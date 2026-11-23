@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Named kustomization.yml on purpose: a component builds only inside an application, never alone.
+# Source only: the local config `source.yaml` carries what the restore check (apps/_restore-check) reads from the backup CronJob. It renders nothing.
+resources:
+  - source.yaml
+replacements:
+  - source:
+      kind: CronJob
+      fieldPath: metadata.name
+    targets:
+      - select:
+          kind: BackupHookSource
+        fieldPaths:
+          - metadata.name
+        options:
+          create: true
+          delimiter: -presync
+          index: 0
+  - source:
+      kind: CronJob
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: BackupHookSource
+        fieldPaths:
+          - metadata.namespace
+        options:
+          create: true
+  - source:
+      kind: CronJob
+      fieldPath: spec.jobTemplate.spec.template
+    targets:
+      - select:
+          kind: BackupHookSource
+        fieldPaths:
+          - spec.template
+        options:
+          create: true

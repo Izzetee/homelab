@@ -5,3 +5,16 @@ resources:
   - pvc.yaml
   - pg-dump.yaml
   - network-policy.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/pg
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=40 5 * * 0
+      - RC_PREFIX=authentik-
+      - RC_TABLES=authentik_core_user,authentik_core_application,django_migrations
+      - RC_KNOWN=authentik_core_user
