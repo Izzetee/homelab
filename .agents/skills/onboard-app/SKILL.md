@@ -27,10 +27,11 @@ One pull request. A new application is not merged through the door's application
 6. **Secrets** (skill `secrets`): a generated value is created with `homelab-bao put-generated <app> <name> <key>` at `secret/apps/<app>/<name>`
    after the owner's go and before the merge (not before the PR); the app reads it through an `ExternalSecret` (`secretStoreRef`: `ClusterSecretStore` `openbao`, key `apps/<app>/<name>`). Add the namespace to the
    conditions of the `ClusterSecretStore` and to `apps/platform/openbao/config/namespaces.txt`. A value only the owner has is entered with
-   `put-entered` by the owner at a terminal; ask.
+   `put-entered` by the owner at a terminal; ask. An **object-storage bucket** (Garage): the key and the bucket are an entry in `apps/platform/garage/buckets.json` in this pull request; they are created by the
+   operations tooling as a named step of the go after the merge (never from the pull request), and the app reads the key pair through an `ExternalSecret` like any other value.
 7. **Route**: an `HTTPRoute` for `<app>.lan.chill-town.de` on the `lan` listener (`sectionName: lan`), exact hostname.
 8. **Public test name** (only when asked): the Access application (the identity provider as its only login method, one group as the allow policy)
-   is created first, as a named step of the go. Do not run `tools/cf-access.sh` for it. The opt-in (`homelab.io/public-dns` annotation, namespace label) is its own line of the go, `opt-in <host> in #<n> @ <40-hex reviewed head>`,
+   is created first, as a named step of the go in the operations tooling (and verified there before the opt-in). Do not run `tools/cf-access.sh` for it. The opt-in (`homelab.io/public-dns` annotation, namespace label) is its own line of the go, `opt-in <host> in #<n> @ <40-hex reviewed head>`,
    merged only after the Access application exists. Verify an unauthenticated request gets 302 or 403.
 9. **Stateful apps**: a CNPG `Cluster` with `local-path` storage plus a dump CronJob that follows the pattern of the existing apps (non-empty dump, sha256, count); a restore drill is part of the
    acceptance (skill `backup-restore`).

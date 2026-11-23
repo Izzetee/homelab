@@ -1,6 +1,6 @@
 ---
 name: backup-restore
-description: Take a manual backup of a stateful application, prove a dump, run a restore drill in a scratch namespace, and know when a production restore needs the owner. Use before risky changes to stateful apps and when asked to test a restore.
+description: Take a manual backup of a stateful application, prove a dump, run a restore drill in the operations tooling, and know when a production restore needs the owner. Use before risky changes to stateful apps and when asked to test a restore.
 ---
 
 # backup-restore
@@ -13,12 +13,8 @@ kept is the owner's: ask when needed.
 
 ## Restore drill (safe)
 
-Ask for the drill as one named step of the go
-(scratch only) and record its result line and counts.
-
-1. A scratch namespace (`<app>-restore`, restricted, default-deny network policy, no route, no public label).
-2. A scratch CNPG cluster with the same major version, then restore the dump into it (`pg_restore`), run `ANALYZE`, compare table counts with the live database and check that one known record exists (by key, as a count or yes/no, without printing the row).
-3. Remove the scratch namespace and its volumes when done. Never point a scratch app at production data stores or the production secret path.
+The drill runs off the cluster in the operations tooling: the set the manual backup just wrote is restored into a scratch database without network, and the tooling compares the
+restored tables with the live database. Ask for it as one named step of the go, on that set, and record its result line (the set, the tables restored and the live count). A result that does not name the fresh set proves nothing. Never create a scratch namespace in the cluster and never point a scratch database at production data stores or the production secret path.
 
 ## Production restore
 
