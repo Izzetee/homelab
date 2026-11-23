@@ -628,6 +628,11 @@ door --dry-run clean
 [[ $rc == 0 ]] && ok "a range without an opted-in route needs no Access read" || bad "clean again: rc=$rc $out"
 
 # ---- merge allowlist (spec "Merge allowlist")
+dm() { # dm <pr> <branch> [door merge option...]: a merge bound to the branch tip as the expected head
+  local n=$1 b=$2
+  shift 2
+  door merge "$n" --expect-head "$(cl rev-parse "refs/heads/$b")" "$@"
+}
 add_pr() { # add_pr <n> <branch>: the PR head is the branch tip, reachable at refs/pull/<n>/head of the endpoint
   local sha
   sha=$(cl rev-parse "refs/heads/$2")
@@ -644,12 +649,12 @@ PYX
 }
 reset_stubs
 add_pr 1 clean
-door merge 1
+dm 1 clean
 [[ $rc == 0 && $out == *'OK merge 1'* && $out == *'NEXT changelog homelab#1'* && $(jq -r '.merge_method' "$t/state/gh-merged.json") == rebase && $(jq -r '.sha' "$t/state/gh-merged.json") == "$(cl rev-parse clean)" ]] && ok "an existing app's change: merged by API rebase on the checked head, NEXT changelog homelab#<n>" || bad "merge allowed: rc=$rc $out"
 owner_case() { # owner_case <label> <branch> <pr>
   reset_stubs
   add_pr "$3" "$2"
-  door merge "$3"
+  dm "$3" "$2"
   [[ $rc != 0 && $out == *"FAIL merge $3 owner"* && ! -e $t/state/gh-merged.json && $(grep -c '^PUT' "$t/state/gh-requests.log" || true) == 0 ]] && ok "$1: FAIL merge <n> owner, no merge request" || bad "$1: rc=$rc $out"
 }
 mkbranch m-newapp
@@ -709,11 +714,11 @@ c_otherapp
 commit "A cross-app secret inside the allowed directory"
 reset_stubs
 add_pr 10 m-secret
-door merge 10
+dm 10 m-secret
 [[ $rc != 0 && $out == *'FAIL externalsecret'* && ! -e $t/state/gh-merged.json ]] && ok "an allowed directory does not excuse a content rule: the merge is refused" || bad "merge content: rc=$rc $out"
 reset_stubs
 add_pr 11 clean failure
-door merge 11
+dm 11 clean
 [[ $rc != 0 && $out == *'FAIL merge 11 ci-ok'* && ! -e $t/state/gh-merged.json ]] && ok "ci-ok not successful on the head: FAIL merge <n> ci-ok" || bad "ci-ok: rc=$rc $out"
 reset_stubs
 add_pr 12 clean
@@ -723,11 +728,201 @@ s = json.load(open(sys.argv[1]))
 s["pulls"]["12"]["head"]["sha"] = "f" * 40
 json.dump(s, open(sys.argv[1], "w"))
 PYX
-door merge 12
+door merge 12 --expect-head "$(printf 'f%.0s' $(seq 40))"
 [[ $rc != 0 && $out == *'FAIL merge 12 head'* && ! -e $t/state/gh-merged.json ]] && ok "the PR head the API names differs from the fetched head: FAIL merge <n> head" || bad "head differs: rc=$rc $out"
 reset_stubs
-door merge abc
+door merge abc --expect-head "$(cl rev-parse clean)"
 [[ $rc != 0 && $out == *'FAIL door merge needs a PR number'* ]] && ok "merge needs a number" || bad "merge arg: $out"
+
+# ---- merge bound to an expected head, GO records, rebased heads, rollback, dry-run (spec "Door merge bound to an expected head" and the next ones)
+puts() { grep -c '^PUT' "$t/state/gh-requests.log" || true; }
+nomerge() { [[ ! -e $t/state/gh-merged.json && $(puts) == 0 ]]; }
+HEX40=$(printf 'a%.0s' $(seq 40))
+mergeusage_case() { # mergeusage_case <label> <door arg>...: a usage refusal before any API call
+  local l=$1
+  shift
+  reset_stubs
+  door "$@"
+  [[ $rc != 0 && $out == *'FAIL door usage: merge <n> --expect-head <40-hex>'* && ! -s $t/state/gh-requests.log ]] && ok "$l: FAIL door usage, no API call" || bad "$l: rc=$rc $out"
+}
+mergeusage_case "merge without --expect-head" merge 7
+mergeusage_case "merge with a repeated --expect-head" merge 7 --expect-head "$HEX40" --expect-head "$HEX40"
+mergeusage_case "merge with a short --expect-head" merge 7 --expect-head "${HEX40:0:12}"
+mergeusage_case "merge with an upper-case --expect-head" merge 7 --expect-head "$(tr a A <<<"$HEX40")"
+mergeusage_case "merge with --user-go without a value" merge 7 --expect-head "$HEX40" --user-go
+reset_stubs
+add_pr 1 clean
+door merge 1 --expect-head "$HEX40"
+[[ $rc != 0 && $out == *'FAIL merge 1 head moved'* && $(grep -c . "$t/state/gh-requests.log") == 1 ]] && nomerge && ok "an expected head other than the API's: FAIL merge <n> head moved after the PR read only, no merge request" || bad "head moved: rc=$rc $out"
+
+# a GO record binds a PR the allowlist refuses
+GOTS=2026-11-24T10:05Z
+mkbranch g-guard
+put .agents/skills/a/SKILL.md 'x'
+commit "Add a skill"
+GH=$(cl rev-parse g-guard)
+reset_stubs
+add_pr 6 g-guard
+dm 6 g-guard --user-go "$GOTS #6 @ $GH"
+[[ $rc == 0 && $out == *"OK go $GOTS #6 @ $GH head $GH"* && $out == *'OK merge 6'* && $out != *'OK merge 6 allowed'* && $(jq -r '.sha' "$t/state/gh-merged.json") == "$GH" ]] && ok "a guardrail PR under a GO record: OK go line, one rebase merge on the head" || bad "go guardrail: rc=$rc $out"
+reset_stubs
+dm 6 g-guard
+[[ $rc != 0 && $out == *'FAIL merge 6 owner'* ]] && nomerge && ok "the same PR without the record: FAIL merge <n> owner, no merge request" || bad "no record: rc=$rc $out"
+for rec in "$GOTS #5 @ $GH" "#6 @ $GH" "$GOTS #6 @ ${GH:0:7}" "$GOTS #6 @ $GH revert #7" "$GOTS #6 @ $(tr a-f A-F <<<"$GH")"; do
+  reset_stubs
+  dm 6 g-guard --user-go "$rec"
+  [[ $rc != 0 && $out == *'FAIL merge 6 go record'* ]] && nomerge && ok "record '${rec:0:24}…': FAIL merge <n> go record, no merge request" || bad "record $rec: rc=$rc $out"
+done
+reset_stubs
+dm 6 g-guard --user-go "$GOTS #6 @ $GH" --dry-run
+[[ $rc == 0 && $out == *"OK go $GOTS #6 @ $GH head $GH"* && $out == *"PLAN merge 6 head $GH"* && $out != *'OK merge'* ]] && nomerge && ok "merge --dry-run under a record: OK go and PLAN merge <n> head <h>, no PUT" || bad "dry-run merge: rc=$rc $out"
+reset_stubs
+add_pr 6 g-guard failure
+dm 6 g-guard --user-go "$GOTS #6 @ $GH" --dry-run
+[[ $rc != 0 && $out == *'FAIL merge 6 ci-ok'* && $out != *'PLAN merge'* ]] && nomerge && ok "merge --dry-run with ci-ok failed: FAIL merge <n> ci-ok, no PLAN, no PUT" || bad "dry-run ci-ok: rc=$rc $out"
+reset_stubs
+dm 1 clean --dry-run
+[[ $rc == 0 && $out == *"PLAN merge 1 head $(cl rev-parse clean)"* && $out != *'OK go'* ]] && nomerge && ok "merge --dry-run inside the allowlist: PLAN merge, no OK go line, no PUT" || bad "dry-run allowlist: rc=$rc $out"
+label_pr() { python3 - "$t/state/gh-state.json" "$1" <<'PYX'
+import json, sys
+s = json.load(open(sys.argv[1]))
+s["pulls"][sys.argv[2]]["labels"] = [{"name": "needs-user"}]
+json.dump(s, open(sys.argv[1], "w"))
+PYX
+}
+reset_stubs
+add_pr 2 clean
+label_pr 2
+dm 2 clean
+[[ $rc != 0 && $out == *'FAIL merge 2 needs-user'* ]] && nomerge && ok "a needs-user PR inside one app without a record: FAIL merge <n> needs-user, no merge request" || bad "needs-user: rc=$rc $out"
+reset_stubs
+dm 2 clean --user-go "$GOTS #2 @ $(cl rev-parse clean)"
+[[ $rc == 0 && $out == *'OK merge 2'* ]] && ok "the same PR under a record naming it: merged" || bad "needs-user go: rc=$rc $out"
+reset_stubs
+add_pr 10 m-secret
+dm 10 m-secret --user-go "$GOTS #10 @ $(cl rev-parse m-secret)"
+[[ $rc != 0 && $out == *'FAIL externalsecret'* ]] && nomerge && ok "a content rule under a valid GO record: the FAIL line stays, no merge request" || bad "content under go: rc=$rc $out"
+
+# rebased head: the same patch on another commit
+rbput() { put apps/tools/demo/configmap.yaml 'apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo
+  namespace: demo
+data:
+  mode: seven'; }
+mkbranch rb-r
+rbput
+commit "Reviewed head"
+RB_R=$(cl rev-parse rb-r)
+mkbranch rb-h
+rbput
+commit "Rebased head"
+RB_H=$(cl rev-parse rb-h)
+mkbranch rb-x
+rbput
+put apps/tools/demo/more.yaml 'a: 1'
+commit "Rebased head with one more file"
+reset_stubs
+add_pr 30 rb-h
+dm 30 rb-h --user-go "$GOTS #30 @ $RB_R"
+[[ $rc == 0 && $out == *"OK go $GOTS #30 @ $RB_R head $RB_H"* && $(jq -r '.sha' "$t/state/gh-merged.json") == "$RB_H" ]] && ok "a rebased head with an equal patch (reviewed head in the clone): OK go @ R head H, merge on H" || bad "rebase equal: rc=$rc $out"
+reset_stubs
+add_pr 31 rb-x
+dm 31 rb-x --user-go "$GOTS #31 @ $RB_R"
+[[ $rc != 0 && $out == *'FAIL merge 31 patch-id'* ]] && nomerge && ok "a rebased head with one more changed file: FAIL merge <n> patch-id, no merge request" || bad "rebase patch: rc=$rc $out"
+reset_stubs
+dm 30 rb-h --user-go "$GOTS #30 @ $(printf '1%.0s' $(seq 40))"
+[[ $rc != 0 && $out == *'FAIL merge 30 reviewed head unknown'* ]] && nomerge && ok "a reviewed head that exists nowhere: FAIL merge <n> reviewed head unknown, no merge request" || bad "rebase unknown: rc=$rc $out"
+# R exists only at the endpoint: fetched by SHA into the run's object directory
+git clone -q "$t/endpoint.git" "$t/scratch"
+git -C "$t/scratch" checkout -q -b rb-remote origin/main
+mkdir -p "$t/scratch/apps/tools/demo"
+cp "$CL/apps/tools/demo/configmap.yaml" "$t/scratch/apps/tools/demo/configmap.yaml"
+git -C "$t/scratch" add -A
+git -C "$t/scratch" commit -q -m "Reviewed head elsewhere"
+RB_E=$(git -C "$t/scratch" rev-parse HEAD)
+git -C "$t/scratch" push -q origin rb-remote
+cl checkout -q rb-h
+! cl cat-file -e "$RB_E^{commit}" 2>/dev/null && ok "the reviewed head of the next case is not in the clone" || bad "the endpoint-only head is in the clone"
+reset_stubs
+dm 30 rb-h --user-go "$GOTS #30 @ $RB_E"
+[[ $rc == 0 && $out == *"OK go $GOTS #30 @ $RB_E head $RB_H"* ]] && ! cl cat-file -e "$RB_E^{commit}" 2>/dev/null && ok "the reviewed head fetched by SHA from the endpoint: equal patch accepted, the clone's objects unchanged" || bad "rebase fetch: rc=$rc $out"
+git -C "$t/endpoint.git" update-ref -d refs/heads/rb-remote
+rm -rf "$t/scratch"
+
+# rollback under the original GO: the quoted PR #40 had the reviewed head R, was merged at M (a rebase of R) and main now holds a copy of M
+set_merged() { # set_merged <pr> <merged true|false> <head sha>
+  python3 - "$t/state/gh-state.json" "$@" <<'PYX'
+import json, sys
+p, n, merged, sha = sys.argv[1:]
+s = json.load(open(p))
+s["pulls"][n] = {"state": "closed", "merged": merged == "true", "base": {"ref": "main", "repo": {"full_name": "Izzetee/homelab"}}, "head": {"sha": sha, "repo": {"full_name": "Izzetee/homelab"}}}
+json.dump(s, open(p, "w"))
+PYX
+}
+for b in rbk-r rbk-m rbk-2; do
+  mkbranch "$b"
+  rbput
+  commit "Original change $b"
+done
+RK_R=$(cl rev-parse rbk-r)
+RK_M=$(cl rev-parse rbk-m)
+oldmain=$(endpoint_main)
+git -C "$t/endpoint.git" fetch -q "$CL" refs/heads/rbk-2:refs/heads/rbk-2-pr refs/heads/rbk-m:refs/heads/rbk-m-pr
+git -C "$t/endpoint.git" update-ref refs/heads/main "$(cl rev-parse rbk-2)"
+git -C "$t/endpoint.git" update-ref refs/pull/40/head "$RK_M"
+cl checkout -q rbk-2
+cl checkout -q -B rbk-rv
+cl revert --no-edit HEAD >/dev/null
+RK_V=$(cl rev-parse rbk-rv)
+reset_stubs
+add_pr 41 rbk-rv
+set_merged 40 true "$RK_M"
+RKREC="$GOTS #40 @ $RK_R"
+dm 41 rbk-rv --user-go "$RKREC revert #41"
+[[ $rc == 0 && $out == *"OK go $RKREC revert #41 head $RK_V"* && $(jq -r '.sha' "$t/state/gh-merged.json") == "$RK_V" ]] && ok "rollback: the GO named R, #40 was merged at its patch-equal rebase M, the revert inverts it: OK go ... revert #41 head <r>" || bad "rollback R!=M: rc=$rc $out"
+reset_stubs
+dm 41 rbk-rv --user-go "$RKREC revert #41" --dry-run
+[[ $rc == 0 && $out == *"PLAN merge 41 head $RK_V"* ]] && nomerge && ok "rollback --dry-run: PLAN merge, no PUT" || bad "rollback dry-run: rc=$rc $out"
+reset_stubs
+set_merged 40 true "$RK_R"
+dm 41 rbk-rv --user-go "$RKREC revert #41"
+[[ $rc == 0 && $out == *"OK go $RKREC revert #41 head $RK_V"* ]] && ok "rollback: #40 merged at the quoted head itself (R = M): accepted" || bad "rollback R=M: rc=$rc $out"
+reset_stubs
+set_merged 40 false "$RK_M"
+dm 41 rbk-rv --user-go "$RKREC revert #41"
+[[ $rc != 0 && $out == *'FAIL merge 41 go record'* ]] && nomerge && ok "rollback: the quoted PR is not merged: FAIL merge <n> go record" || bad "rollback open: rc=$rc $out"
+reset_stubs
+set_merged 40 true "$(cl rev-parse rb-x)"
+dm 41 rbk-rv --user-go "$RKREC revert #41"
+[[ $rc != 0 && $out == *'FAIL merge 41 go record'* ]] && nomerge && ok "rollback: the quoted PR was merged at a head with another patch than the quoted head: FAIL merge <n> go record" || bad "rollback other head: rc=$rc $out"
+reset_stubs
+set_merged 40 true "$RK_M"
+dm 41 rbk-rv --user-go "$RKREC revert #8"
+[[ $rc != 0 && $out == *'FAIL merge 41 go record'* ]] && nomerge && ok "rollback: the suffix names another PR: FAIL merge <n> go record" || bad "rollback suffix: rc=$rc $out"
+reset_stubs
+dm 41 rbk-rv --user-go "$GOTS #99 @ $RK_R revert #41"
+[[ $rc != 0 && $out == *'FAIL merge 41 go record'* ]] && nomerge && ok "rollback: the quoted PR cannot be read: FAIL merge <n> go record" || bad "rollback unknown PR: rc=$rc $out"
+git -C "$t/endpoint.git" update-ref refs/heads/main "$oldmain"
+
+# --dry-run <branch> --rebased: the lease line, nothing pushed
+mkbranch rbp
+put apps/tools/demo/more.yaml 'a: 1'
+commit "First version"
+git -C "$t/endpoint.git" fetch -q "$CL" refs/heads/rbp:refs/heads/rbp
+RBP_T=$(git -C "$t/endpoint.git" rev-parse refs/heads/rbp)
+mkbranch rbp
+put apps/tools/demo/more.yaml 'a: 2'
+commit "Second version"
+reset_stubs
+door --dry-run rbp
+[[ $rc != 0 && $out == *'FAIL door not a fast-forward (use --rebased on a PR branch)'* && $out != *'PLAN'* ]] && ok "dry-run of a rebased branch without --rebased: not a fast-forward" || bad "rebased no flag: rc=$rc $out"
+door --dry-run rbp --rebased
+[[ $rc == 0 && $out == *'OK door commits=1'* && $out == *"PLAN lease refs/heads/rbp:$RBP_T"* && $out == *'PLAN push rbp commits=1'* && $(git -C "$t/endpoint.git" rev-parse refs/heads/rbp) == "$RBP_T" ]] && ok "--dry-run --rebased: checks run, PLAN lease with the remote tip, PLAN push, endpoint ref unchanged" || bad "rebased dry-run: rc=$rc $out"
+cl branch -q -f rbp-new rbp
+door --dry-run rbp-new --rebased
+[[ $rc == 0 && $out == *'PLAN lease refs/heads/rbp-new:none'* ]] && ok "--dry-run --rebased of a branch the endpoint lacks: PLAN lease ...:none" || bad "rebased none: rc=$rc $out"
 
 # ---- Renovate's own pull requests (spec "The homelab door merges Renovate's own pull requests")
 BOT="29139614+renovate[bot]${AT}users.noreply.github.com"
@@ -762,31 +957,31 @@ data:
 renovate_commit "Update demo" "$WEBFLOW"
 reset_stubs
 add_renovate_pr 20 r-ok 'renovate[bot]' Bot renovate/demo-3.x true valid
-door merge 20
+dm 20 r-ok
 [[ $rc == 0 && $out == *'OK merge 20'* && $(jq -r '.merge_method' "$t/state/gh-merged.json") == rebase && $(jq -r '.sha' "$t/state/gh-merged.json") == "$(cl rev-parse r-ok)" ]] && grep -q '^GET repos/Izzetee/homelab/pulls/20/commits?per_page=100$' "$t/state/gh-requests.log" && ok "a signed Renovate PR inside one app: merged by API rebase on the checked head (one commit-list read)" || bad "renovate merge: rc=$rc $out"
 reset_stubs
 add_renovate_pr 21 r-ok Izzetee User renovate/demo-3.x true valid
-door merge 21
+dm 21 r-ok
 renovate_case "the bot address on a PR not opened by renovate[bot]" "FAIL identity $(cl rev-parse --short=7 r-ok)"
 reset_stubs
 add_renovate_pr 22 r-ok 'renovate[bot]' User renovate/demo-3.x true valid
-door merge 22
+dm 22 r-ok
 renovate_case "login renovate[bot] but a user account" "FAIL identity"
 reset_stubs
 add_renovate_pr 23 r-ok 'renovate[bot]' Bot someone/branch true valid
-door merge 23
+dm 23 r-ok
 renovate_case "renovate[bot] PR from a branch outside renovate/" "FAIL identity"
 reset_stubs
 add_renovate_pr 24 r-ok 'renovate[bot]' Bot renovate/demo-3.x false unsigned
-door merge 24
+dm 24 r-ok
 renovate_case "a bot-authored commit GitHub reports unverified" "FAIL identity"
 reset_stubs
 add_renovate_pr 25 r-ok 'renovate[bot]' Bot renovate/demo-3.x false invalid
-door merge 25
+dm 25 r-ok
 renovate_case "a bot-authored commit with another verification reason" "FAIL identity"
 reset_stubs
 add_renovate_pr 26 r-ok 'renovate[bot]' Bot renovate/demo-3.x true valid nolist
-door merge 26
+dm 26 r-ok
 renovate_case "a bot-authored commit missing from GitHub's commit list" "FAIL identity"
 mkbranch r-pushed
 put apps/tools/demo/configmap.yaml 'apiVersion: v1
@@ -799,7 +994,7 @@ data:
 renovate_commit "Update demo again" "$(printf 'someone%s' "${AT}example.com")"
 reset_stubs
 add_renovate_pr 27 r-pushed 'renovate[bot]' Bot renovate/demo-4.x true valid
-door merge 27
+dm 27 r-pushed
 renovate_case "the bot author with another committer than web-flow" "FAIL identity"
 reset_stubs
 door r-ok
@@ -829,14 +1024,14 @@ put apps/tools/demo/other.yaml 'a: 1'
 commit "A personal commit on top"
 reset_stubs
 add_renovate_pr 28 r-mixed 'renovate[bot]' Bot renovate/demo-5.x true valid
-door merge 28
+dm 28 r-mixed
 [[ $rc == 0 && $out == *'OK merge 28'* ]] && ok "a Renovate PR with one more personal commit: the personal commit keeps the strict rule and passes" || bad "renovate mixed: rc=$rc $out"
 mkbranch r-docs
 put docs/a.md 'x'
 renovate_commit "Update docs" "$WEBFLOW"
 reset_stubs
 add_renovate_pr 29 r-docs 'renovate[bot]' Bot renovate/docs-1.x true valid
-door merge 29
+dm 29 r-docs
 renovate_case "a renovate[bot] PR outside apps/tools/" "FAIL merge 29 owner"
 [[ $(grep -c 'pulls/29/commits' "$t/state/gh-requests.log" || true) == 0 ]] && ok "the allowlist is checked before the commit list is read" || bad "commit list read before the allowlist"
 grep -qE '^(GET|POST|PATCH|PUT) repos/Izzetee/homelab/(pulls|commits)' "$t/state/gh-requests.log" || true

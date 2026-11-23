@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# homelab-door install [--dry-run] | uninstall | doctor | --dry-run <branch> | <branch> [--rebased] | --check-tree [<rev>] | --check <range>|--all
-#              --check-text <file>... | pr <branch> <title-file> <body-file> | pr-edit <n> <title-file> <body-file> | merge <n> | --hook <remote> <url>
+# homelab-door install [--dry-run] | uninstall | doctor | --dry-run <branch> [--rebased] | <branch> [--rebased] | --check-tree [<rev>] | --check <range>|--all
+#              --check-text <file>... | pr <branch> <title-file> <body-file> | pr-edit <n> <title-file> <body-file> | --hook <remote> <url>
+#              merge <n> --expect-head <40-hex> [--user-go '<UTC> #<n> @ <40-hex>[ revert #<n>]'] [--dry-run]
+# (--dry-run <branch> [--rebased] and merge --dry-run print PLAN lines and change nothing.)
 # Started by the launcher, which provides DOOR_SHA, DOOR_URL, DOOR_CODE, DOOR_SRC, DOOR_CLONE and DOOR_LAUNCHER.
 set -euo pipefail
 umask 077
@@ -206,7 +208,11 @@ push_main() { # push_main <branch> <real|dry> [--rebased]
   branch_range "$b" "$rebased"
   if [[ $REMOTE_SHA == "$TIP" ]]; then echo "SKIP $b up to date"; return 0; fi
   run_checks 0 "" "refs/heads/$b" || exit 1
-  if [[ $mode == dry ]]; then echo "PLAN push $b commits=$N"; return 0; fi
+  if [[ $mode == dry ]]; then
+    [[ $rebased == 0 ]] || echo "PLAN lease refs/heads/$b:${REMOTE_SHA:-none}"
+    echo "PLAN push $b commits=$N"
+    return 0
+  fi
   need_entry github GH_TOKEN || exit 1
   [[ $rebased == 0 || -z $REMOTE_SHA ]] || lease=("--force-with-lease=refs/heads/$b:$REMOTE_SHA")
   printf '%s' "$TIP" >"$(stamp_file)"
@@ -342,23 +348,69 @@ pr_edit_main() { # pr_edit_main <n> <title-file> <body-file>
   echo "OK pr-edit #$n"
 }
 
-merge_main() { # merge_main <n>
-  local n=${1:-} p pr sha got ok msg
+# a GO record is a line the owner wrote: UTC, the PR and the reviewed head, optionally ` revert #<n>` (a rollback of a PR merged under that GO)
+GO_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z #([0-9]+) @ ([0-9a-f]{40})( revert #([0-9]+))?$'
+MERGE_USAGE="usage: merge <n> --expect-head <40-hex> [--user-go '<record>'] [--dry-run]"
+# have_commit <sha> [<fetch spec>]: the commit is readable from the clone's objects or fetched by SHA (or spec) into the run's object directory
+have_commit() {
+  hl cat-file -e "$1^{commit}" 2>/dev/null && return 0
+  hl fetch -q --no-tags --no-write-fetch-head "$DOOR_URL" "${2:-$1}" >/dev/null 2>&1 && hl cat-file -e "$1^{commit}" 2>/dev/null
+}
+# pid <rev>: patch-id of the cumulative diff from the merge base with main; empty when there is none
+pid() {
+  local rev=$1 b
+  b=$(hl merge-base "$DOOR_SHA" "$rev" 2>/dev/null) || return 0
+  hl diff --no-ext-diff --no-textconv "$b" "$rev" 2>/dev/null | git patch-id --verbatim | awk 'NR==1{print $1}'
+}
+# same_patch <n> <reviewed> <actual>: equal heads, or the reviewed head is readable and carries the same non-empty patch
+same_patch() {
+  local a b
+  [[ $2 != "$3" ]] || return 0
+  have_commit "$2" || { echo "FAIL merge $1 reviewed head unknown"; return 1; }
+  a=$(pid "$2") || a=""
+  b=$(pid "$3") || b=""
+  [[ -n $a && $a == "$b" ]] || { echo "FAIL merge $1 patch-id"; return 1; }
+}
+# go_bound <n> <head> <record PR> <record head> <rollback 0|1>: the record binds this merge; prints the FAIL line and returns 1 otherwise
+go_bound() {
+  local n=$1 h=$2 o=$3 r=$4 rev=$5 po m
+  if [[ $rev == 0 ]]; then same_patch "$n" "$r" "$h"; return; fi
+  # rollback: the quoted PR was merged at the quoted head or at a patch-equal rebase of it (the owner's GO named the reviewed head);
+  # that this PR is a pure revert of exactly the merged commits is the team's rule (skill publish), not checked here
+  po=$(gh_call GET "repos/$REPO/pulls/$o" 2>/dev/null) || { echo "FAIL merge $n go record"; return 1; }
+  m=$(jq -r 'select(.merged == true and .base.ref == "main") | .head.sha // ""' <<<"$po" 2>/dev/null) || m=""
+  [[ $m =~ ^[0-9a-f]{40}$ ]] && have_commit "$m" "pull/$o/head" || { echo "FAIL merge $n go record"; return 1; }
+  same_patch "$n" "$r" "$m" >/dev/null || { echo "FAIL merge $n go record"; return 1; }
+}
+
+merge_main() { # merge_main <n> <expected head> <GO record or empty> <dry 0|1>
+  local n=${1:-} want=$2 record=$3 dry=$4 p pr sha got ok msg go_pr="" go_head="" rev=0
   [[ $n =~ ^[0-9]+$ ]] || die "merge needs a PR number"
+  if [[ -n $record ]]; then
+    [[ $record =~ $GO_RE ]] || { echo "FAIL merge $n go record"; exit 1; }
+    go_pr=${BASH_REMATCH[2]} go_head=${BASH_REMATCH[3]}
+    if [[ -n ${BASH_REMATCH[4]} ]]; then rev=1; [[ ${BASH_REMATCH[5]} == "$n" ]] || { echo "FAIL merge $n go record"; exit 1; }
+    else [[ $go_pr == "$n" ]] || { echo "FAIL merge $n go record"; exit 1; }; fi
+  fi
   p="repos/$REPO/pulls/$n"
   pr=$(gh_call GET "$p" 2>/dev/null) || { echo "FAIL merge $n unreadable"; exit 1; }
+  sha=$(jq -r '.head.sha' <<<"$pr")
+  [[ $sha == "$want" ]] || { echo "FAIL merge $n head moved"; exit 1; }
   [[ $(jq -r '.state' <<<"$pr") == open && $(jq -r '.base.ref' <<<"$pr") == main ]] || { echo "FAIL merge $n not an open PR into main"; exit 1; }
   [[ $(jq -r '.head.repo.full_name // "none"' <<<"$pr") == "$(jq -r '.base.repo.full_name' <<<"$pr")" ]] || { echo "FAIL merge $n fork"; exit 1; }
-  sha=$(jq -r '.head.sha' <<<"$pr")
-  [[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "FAIL merge $n head"; exit 1; }
   fetch_base
   got=$(hl ls-remote "$DOOR_URL" "refs/pull/$n/head" 2>/dev/null | awk '{print $1}' | head -1)
   [[ $got == "$sha" ]] || { echo "FAIL merge $n head"; exit 1; }
   hl fetch -q --no-tags --no-write-fetch-head "$DOOR_URL" "pull/$n/head" >/dev/null 2>&1 || { echo "FAIL merge $n head"; exit 1; }
   hl cat-file -e "$sha^{commit}" 2>/dev/null || { echo "FAIL merge $n head"; exit 1; }
-  # the allowlist first: the paths of every commit of the PR (a path inside one existing app directory only)
-  hl log -z --name-only --no-renames --format= "$DOOR_SHA..$sha" | tr '\0' '\n' >"$TMP/paths.txt"
-  python3 "$CHK" merge-paths "$HL" "$DOOR_SHA" "$n" <"$TMP/paths.txt" || exit 1
+  if [[ -n $record ]]; then
+    go_bound "$n" "$sha" "$go_pr" "$go_head" "$rev" || exit 1
+  else
+    # the allowlist: the paths of every commit of the PR (a path inside one existing app directory only); a GO record replaces it
+    hl log -z --name-only --no-renames --format= "$DOOR_SHA..$sha" | tr '\0' '\n' >"$TMP/paths.txt"
+    python3 "$CHK" merge-paths "$HL" "$DOOR_SHA" "$n" <"$TMP/paths.txt" || exit 1
+    [[ $(jq -r '[.labels[]?.name] | index("needs-user") != null' <<<"$pr") == false ]] || { echo "FAIL merge $n needs-user"; exit 1; }
+  fi
   TIP=$sha
   REVS=("$DOOR_SHA..$sha")
   # a PR opened by renovate[bot] from a renovate/ branch of this repository (same-repository is required above): its commits may carry the bot
@@ -370,6 +422,8 @@ merge_main() { # merge_main <n>
   run_checks 0 "" "refs/heads/pull-$n" || exit 1
   ok=$(gh_call GET "repos/$REPO/commits/$sha/check-runs" 2>/dev/null | jq -r '[.check_runs[] | select(.name == "ci-ok" and .app.slug == "github-actions" and .status == "completed" and .conclusion == "success")] | length') || ok=0
   [[ ${ok:-0} -ge 1 ]] || { echo "FAIL merge $n ci-ok"; exit 1; }
+  [[ -z $record ]] || echo "OK go $record head $sha"
+  if [[ $dry == 1 ]]; then echo "PLAN merge $n head $sha"; return 0; fi
   if ! gh_call PUT "$p/merge" "$(jq -nc --arg s "$sha" '{merge_method: "rebase", sha: $s}')" >/dev/null 2>"$TMP/merge.err"; then
     msg=$(sed -n 's/^.*gh: //p' "$TMP/merge.err" | head -n 1 | tr -cd '[:print:]' | cut -c1-120)
     echo "FAIL merge $n api${msg:+: $msg}"
@@ -385,14 +439,29 @@ case $1 in
   install) shift; install_main "$@" ;;
   uninstall) uninstall_main ;;
   doctor) doctor_main ;;
-  --dry-run) [[ $# -eq 2 ]] || die "usage: --dry-run <branch>"; push_main "$2" dry ;;
+  --dry-run) [[ $# -eq 2 || ( $# -eq 3 && $3 == --rebased ) ]] || die "usage: --dry-run <branch> [--rebased]"; push_main "$2" dry "${3:-}" ;;
   --hook) hook_main "${2:-}" "${3:-}" ;;
   --check-tree) [[ $# -le 2 ]] || die "usage: --check-tree [<rev>]"; check_tree_main "${2:-HEAD}" ;;
   --check) [[ $# -eq 2 ]] || die "usage: --check <range>|--all"; check_main "$2" ;;
   --check-text) shift; check_text "$@" || exit 1 ;;
   pr) [[ $# -eq 4 ]] || die "usage: pr <branch> <title-file> <body-file>"; pr_main "$2" "$3" "$4" ;;
   pr-edit) [[ $# -eq 4 ]] || die "usage: pr-edit <n> <title-file> <body-file>"; pr_edit_main "$2" "$3" "$4" ;;
-  merge) [[ $# -eq 2 ]] || die "usage: merge <n>"; merge_main "$2" ;;
+  merge)
+    shift
+    mn=${1:-}
+    [[ $# -eq 0 ]] || shift
+    mhead="" mgo="" mdry=0 seen_head=0 seen_go=0
+    while [[ $# -gt 0 ]]; do
+      case $1 in
+        --expect-head) [[ $seen_head == 0 && $# -ge 2 ]] || die "$MERGE_USAGE"; seen_head=1 mhead=$2; shift 2 ;;
+        --user-go) [[ $seen_go == 0 && $# -ge 2 ]] || die "$MERGE_USAGE"; seen_go=1 mgo=$2; shift 2 ;;
+        --dry-run) [[ $mdry == 0 ]] || die "$MERGE_USAGE"; mdry=1; shift ;;
+        *) die "$MERGE_USAGE" ;;
+      esac
+    done
+    [[ -n $mn && $mhead =~ ^[0-9a-f]{40}$ ]] || die "$MERGE_USAGE"
+    [[ $seen_go == 0 || -n $mgo ]] || die "$MERGE_USAGE"
+    merge_main "$mn" "$mhead" "$mgo" "$mdry" ;;
   -*) die "unknown mode" ;;
   *) [[ $# -le 2 && ( $# -eq 1 || $2 == --rebased ) ]] || die "usage: <branch> [--rebased]"; push_main "$1" real "${2:-}" ;;
 esac
