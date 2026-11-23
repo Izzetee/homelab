@@ -1,0 +1,390 @@
+# Restore check of the pg_dump sets of an application (shared by every application whose backup CronJob writes a pg_dump set).
+# Fields of the application come from the backup hook's source (namespace, name, image, claim, node selector, the backup's user) and from its
+# ConfigMap `restore-check` (set prefix, tables, sidecars, allowed extensions, schedule) by the replacements of kustomization.yml.
+#
+# init container `select` (the backup's own user, the claim read-only): per class (the claim root: scheduled and manual sets; `.presync`: hook
+# sets) the newest complete set of exactly the expected names, its age and sidecar format, then one bounded copy of the dump into scratch;
+# only that private copy is verified against the set's checksum and handed on (group-readable for the restore container).
+# A newest set that is incomplete (and older than the grace time) or damaged fails the check; an older set is never used instead.
+# container `restore` (postgres user, no claim): a temporary server on a socket in scratch only (no TCP, no credentials). The superuser only
+# creates the restore role (no superuser, no role or database creation), its database and the allowed extensions the dump names; then the
+# superuser's login is removed and the archive (without its extension, owner, privilege and comment entries) is restored by the restore role
+# alone. Table and row counts, the expected tables, one table that must hold rows, the extensions; then the server stops and scratch is
+# emptied, also on failure.
+# Output: fixed `OK`/`FAIL`/`RESULT` lines with counts and set names only; every tool's own output is discarded (it can hold data).
+# Termination message of the restore (`restore` container; the select step's has the two set ids only): `nightly=<set> presync=<set|none> rows-nightly=<n> rows-presync=<n|none>`,
+# the two set ids and one validated row total per class, database rows only (no file, sidecar or asset count); `FAIL <phase> <class>` on failure.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-restore-check # <backup cronjob>-restore-check
+  labels:
+    homelab.io/restore-check: "true"
+spec:
+  schedule: placeholder # from the ConfigMap
+  timeZone: Etc/UTC
+  startingDeadlineSeconds: 21600
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        homelab.io/restore-check: "true"
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/component: restore-check
+            homelab.io/restore-check: "true"
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          nodeSelector: {} # from the hook source
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 26
+            runAsGroup: 26
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: select
+              image: placeholder # from the hook source
+              command: ["/bin/bash", "-c"]
+              args:
+                - &script |
+                  set -euo pipefail
+                  export LC_ALL=C
+                  exec 3>&1 </dev/null >/dev/null 2>&1
+                  umask 027
+                  mode=${1:-} phase=config cls=- pg=/scratch/pg in=/scratch/in done="" rc=0
+                  say() { printf '%s\n' "$*" >&3; }
+                  # the server and the tools that read the archive never get the output descriptor
+                  x() { "$@" 3>&-; }
+                  cleanup() {
+                    if [ -f "$pg/data/postmaster.pid" ]; then x pg_ctl -D "$pg/data" -m immediate -w -t 60 stop || return 1; fi
+                    rm -rf "$pg" || return 1
+                    if [ "$mode" != select ] || [ "$rc" != 0 ]; then rm -rf "$in" || return 1; fi
+                  }
+                  finish() {
+                    rc=$?
+                    set +e
+                    trap - EXIT
+                    if ! cleanup; then
+                      [ "$rc" != 0 ] || phase=cleanup
+                      rc=1
+                    fi
+                    if [ "$rc" = 0 ]; then
+                      say "RESULT OK $mode"
+                      printf '%s' "$done" >/dev/termination-log
+                    else
+                      say "FAIL $phase $cls"
+                      say "RESULT FAIL $mode"
+                      printf 'FAIL %s %s' "$phase" "$cls" >/dev/termination-log
+                    fi
+                    exit "$rc"
+                  }
+                  trap finish EXIT
+                  trap 'exit 143' TERM INT
+                  re_num='^[0-9]{1,15}$'
+                  re_id='^[A-Za-z_][A-Za-z0-9_]{0,62}$'
+                  re_ext='^[a-z0-9]+(\.[a-z0-9]+)*$'
+                  re_pgext='^[a-z0-9_-]{1,63}$'
+                  RC_TABLES=${RC_TABLES-} RC_EXTENSIONS=${RC_EXTENSIONS-}
+                  [[ $mode =~ ^(select|restore)$ ]] || exit 1
+                  [[ ${RC_PREFIX-} =~ ^([a-z0-9][a-z0-9-]{0,40}-)?$ ]] || exit 1
+                  for v in RC_MAX_AGE_HOURS RC_GRACE_SECONDS RC_SCRATCH_MIB RC_EXPAND; do [[ ${!v:-} =~ ^[0-9]{1,6}$ ]] || exit 1; done
+                  for t in ${RC_TABLES//,/ } ${RC_KNOWN-}; do [[ $t =~ $re_id ]] || exit 1; done
+                  for e in ${RC_EXTENSIONS//,/ }; do [[ $e =~ $re_pgext ]] || exit 1; done
+                  files="dump dump.sha256"
+                  for s in ${RC_COUNTS-}; do
+                    [[ $s =~ ^([a-z0-9]+(\.[a-z0-9]+)*)=[A-Za-z_][A-Za-z0-9_]{0,62}\.[A-Za-z_][A-Za-z0-9_]{0,62}$ ]] || exit 1
+                    files="$files ${s%%=*}"
+                  done
+                  if [ -n "${RC_MANIFEST-}" ]; then [[ $RC_MANIFEST =~ $re_ext ]] || exit 1; files="$files $RC_MANIFEST"; fi
+                  [ -z "${RC_ASSETS-}" ] || [[ $RC_ASSETS =~ $re_ext ]] || exit 1
+                  alt=$(printf '%s\n' $files | sed 's/\./\\./g' | paste -sd'|' -)
+                  budget=$((RC_SCRATCH_MIB * 1048576))
+                  avail() { local k; k=$(df -Pk /scratch | awk 'NR==2 {print $4}'); [[ $k =~ $re_num ]] || return 1; printf '%s' $((k * 1024)); }
+                  hash() { sha256sum <"$1" | cut -c1-64; }
+                  epoch() { date -u -d "${1:0:4}-${1:4:2}-${1:6:2} ${1:9:2}:${1:11:2}:${1:13:2} UTC" +%s; }
+
+                  # newest complete set of a class: sets $set and $ts ("" when the class has none and is optional)
+                  pick() {
+                    local c=$1 dir=$2 req=$3 p n s e have want stamps=""
+                    cls=$c phase=select set="" ts=0
+                    if [ -L "$dir" ]; then phase=layout; exit 1; fi
+                    # a class directory that is truly absent has no set; anything else that is not a directory is a layout failure
+                    if [ ! -d "$dir" ]; then
+                      if [ -e "$dir" ]; then phase=layout; exit 1; fi
+                      [ "$req" = 0 ] && return 0
+                      phase=noset; exit 1
+                    fi
+                    for p in "$dir"/*; do
+                      n=${p##*/}
+                      if [[ $n =~ ^${RC_PREFIX}([0-9]{8}T[0-9]{6}Z)\.($alt)$ ]]; then stamps+="${BASH_REMATCH[1]}"$'\n'; fi
+                    done
+                    for s in $(printf '%s' "$stamps" | sort -ru); do
+                      ts=$(epoch "$s")
+                      have=0 want=0
+                      for e in $files; do
+                        want=$((want + 1))
+                        p=$dir/$RC_PREFIX$s.$e
+                        if [ -L "$p" ] || { [ -e "$p" ] && [ ! -f "$p" ]; }; then phase=layout; exit 1; fi
+                        if [ -f "$p" ]; then have=$((have + 1)); fi
+                      done
+                      if [ "$have" = "$want" ]; then set=$RC_PREFIX$s; return 0; fi
+                      # a set that is still being written is skipped; any other incomplete newest set is a failure
+                      if [ $((now - ts)) -lt "$RC_GRACE_SECONDS" ]; then continue; fi
+                      phase=incomplete; exit 1
+                    done
+                    ts=0
+                    [ "$req" = 0 ] && return 0
+                    phase=noset; exit 1
+                  }
+
+                  # checks one class and hands a verified private copy of its dump and its sidecar values to the restore container
+                  handoff() {
+                    local c=$1 dir=$2 req=$3 f n line hex size v e lines bad out
+                    pick "$c" "$dir" "$req"
+                    if [ -z "$set" ]; then say "OK select $c none=1"; return 0; fi
+                    if [ "$c" = nightly ]; then
+                      phase=future; [ "$ts" -le $((now + 600)) ] || exit 1
+                      phase=stale; [ $((now - ts)) -le $((RC_MAX_AGE_HOURS * 3600)) ] || exit 1
+                    fi
+                    f=$dir/$set.dump n=$set.dump
+                    phase=sumfile
+                    [ "$(stat -c %s "$f.sha256")" = $((64 + 2 + ${#n} + 1)) ] || exit 1
+                    line=$(cat "$f.sha256")
+                    [[ $line =~ ^([0-9a-f]{64})\ \ (.+)$ ]] || exit 1
+                    [ "${BASH_REMATCH[2]}" = "$n" ] || exit 1
+                    hex=${BASH_REMATCH[1]}
+                    phase=empty; size=$(stat -c %s "$f"); [ "$size" -gt 0 ] || exit 1
+                    phase=space
+                    [ $((used + size)) -le "$budget" ] || exit 1
+                    [ "$(avail)" -gt $((size + 67108864)) ] || exit 1
+                    out=$in/$c
+                    phase=handoff
+                    # the restore container runs as another user of the same group: directories and files of the hand-off are group-readable
+                    mkdir -p "$in"; chmod 0770 "$in"; mkdir -m 0770 "$out"
+                    for s in ${RC_COUNTS-}; do
+                      e=${s%%=*}
+                      phase=sidecar
+                      [ "$(stat -c %s "$dir/$set.$e")" -le 16 ] || exit 1
+                      v=$(cat "$dir/$set.$e")
+                      [[ $v =~ $re_num ]] || exit 1
+                      printf '%s\n' "$v" >"$out/$e"
+                    done
+                    if [ -n "${RC_MANIFEST-}" ]; then
+                      phase=manifest
+                      lines=$(wc -l <"$dir/$set.$RC_MANIFEST")
+                      bad=$(grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$dir/$set.$RC_MANIFEST") || [ "$?" = 1 ]
+                      [[ $lines =~ $re_num ]] && [ "$bad" = 0 ] || exit 1
+                      printf '%s\n' "$lines" >"$out/manifest"
+                    fi
+                    phase=handoff
+                    # one bounded read of the dump; only this private copy is verified and restored, never the claim's file again
+                    head -c $((size + 1)) <"$f" >"$out/dump"
+                    phase=checksum
+                    [ "$(stat -c %s "$out/dump")" = "$size" ] || exit 1
+                    [ "$(hash "$out/dump")" = "$hex" ] || exit 1
+                    chmod 0640 "$out/dump"
+                    printf '%s\n' "$set" >"$out/set"
+                    printf '%s\n' "$hex" >"$out/sha"
+                    used=$((used + size))
+                    say "OK select $c set=$set age-hours=$(((now - ts) / 3600)) bytes=$size"
+                    if [ "$c" = nightly ]; then set_nightly=$set; else set_presync=$set; fi
+                  }
+
+                  # restores one handed-off class into a temporary server as the restricted restore role and counts
+                  restore() {
+                    local c=$1 d=$in/$1 hex size need toc toce tables rows ext exts s e t col side n
+                    cls=$c phase=handoff
+                    if [ ! -d "$d" ]; then
+                      [ "$c" = presync ] || exit 1
+                      say "OK restore $c none=1"; return 0
+                    fi
+                    set=$(cat "$d/set"); [[ $set =~ ^${RC_PREFIX}[0-9]{8}T[0-9]{6}Z$ ]] || exit 1
+                    hex=$(cat "$d/sha"); [[ $hex =~ ^[0-9a-f]{64}$ ]] || exit 1
+                    phase=checksum; [ "$(hash "$d/dump")" = "$hex" ] || exit 1
+                    size=$(stat -c %s "$d/dump")
+                    phase=space
+                    need=$((size * RC_EXPAND + 268435456))
+                    [ $((need + $(du -sk "$in" | cut -f1) * 1024)) -le "$budget" ] || exit 1
+                    [ "$(avail)" -gt "$need" ] || exit 1
+                    phase=restore
+                    mkdir -m 0700 "$pg" "$pg/sock"
+                    x pg_restore -l "$d/dump" >"$pg/toc"
+                    toc=$(grep -cE '^[0-9]+; ' "$pg/toc" || true)
+                    exts=$(sed -nE 's/^[0-9]+; [0-9]+ [0-9]+ EXTENSION - ([^ ]+)( .*)?$/\1/p' "$pg/toc" | sort -u)
+                    # every extension of the dump must be allowed for the application; only those are created, by the setup below
+                    phase=extensions
+                    toce=0
+                    for e in $exts; do
+                      [[ $e =~ $re_pgext ]] || exit 1
+                      [ "$e" != plpgsql ] || continue
+                      [[ ,${RC_EXTENSIONS-}, == *",$e,"* ]] || exit 1
+                      toce=$((toce + 1))
+                    done
+                    grep -vE '^[0-9]+; [0-9]+ [0-9]+ EXTENSION ' "$pg/toc" >"$pg/list" || true
+                    phase=initdb
+                    x initdb -D "$pg/data" -U postgres -E UTF8 --locale=C --auth-local=trust --auth-host=reject --no-sync --no-instructions
+                    printf 'local rc rc_restore trust\nlocal all postgres trust\n' >"$pg/data/pg_hba.conf"
+                    phase=start
+                    x pg_ctl -D "$pg/data" -w -t 120 -o "-c listen_addresses='' -c unix_socket_directories=$pg/sock -c fsync=off -c full_page_writes=off -c synchronous_commit=off -c shared_buffers=32MB -c max_connections=8 -c dynamic_shared_memory_type=mmap -c max_parallel_workers_per_gather=0 -c max_parallel_maintenance_workers=0 -c logging_collector=off" start
+                    export PGHOST=$pg/sock
+                    q() { x psql -X -q -At -v ON_ERROR_STOP=1 -U "${3:-rc_restore}" -d "${2:-rc}" -c "$1"; }
+                    phase=setup
+                    q 'create role rc_restore login nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls' postgres postgres
+                    q 'create database rc owner rc_restore' postgres postgres
+                    for e in $exts; do [ "$e" = plpgsql ] || q "create extension \"$e\"" rc postgres; done
+                    # from here on only the restore role connects, and only to its database
+                    phase=lockdown
+                    printf 'local rc rc_restore trust\n' >"$pg/data/pg_hba.conf"
+                    x pg_ctl -D "$pg/data" reload
+                    for _ in $(seq 100); do q 'select 1' rc postgres || break; sleep 0.1; done
+                    ! q 'select 1' rc postgres || exit 1
+                    ! q 'select 1' postgres || exit 1
+                    [ "$(q 'select (rolsuper or rolcreaterole or rolcreatedb or rolbypassrls or rolreplication)::int from pg_roles where rolname = current_user')" = 0 ] || exit 1
+                    phase=restore
+                    x pg_restore --exit-on-error --single-transaction --no-owner --no-privileges --no-comments --no-publications --no-subscriptions --no-security-labels -U rc_restore -d rc -L "$pg/list" "$d/dump"
+                    phase=counts
+                    q 'analyze'
+                    tables=$(q "select count(*) from pg_tables where tableowner = current_user")
+                    rows=$(q "select coalesce(sum((xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', schemaname, tablename), false, true, '')))[1]::text::bigint), 0) from pg_tables where tableowner = current_user")
+                    ext=$(q "select count(*) from pg_extension where extname <> 'plpgsql'")
+                    for n in "$toc" "$toce" "$tables" "$rows" "$ext"; do [[ $n =~ $re_num ]] || exit 1; done
+                    phase=tables; [ "$tables" -gt 0 ] || exit 1
+                    phase=extensions; [ "$ext" -ge "$toce" ] || exit 1
+                    for t in ${RC_TABLES//,/ }; do
+                      phase=tables
+                      n=$(q "select count(*) from public.\"$t\""); [[ $n =~ $re_num ]] || exit 1
+                      say "OK rows $c $t=$n"
+                    done
+                    if [ -n "${RC_KNOWN-}" ]; then
+                      phase=known
+                      [ "$(q "select exists (select 1 from public.\"$RC_KNOWN\")")" = t ] || exit 1
+                      say "OK known $c $RC_KNOWN=yes"
+                    fi
+                    # a sidecar count was taken after the dump (another snapshot): both values are reported, a difference is not a failure
+                    for s in ${RC_COUNTS-}; do
+                      phase=sidecar
+                      e=${s%%=*} t=${s#*=}; col=${t#*.} t=${t%%.*}
+                      side=$(cat "$d/$e"); [[ $side =~ $re_num ]] || exit 1
+                      n=$(q "select count(*) from public.\"$t\" where \"$col\" is null"); [[ $n =~ $re_num ]] || exit 1
+                      say "OK sidecar $c $e=$side restored=$n match=$([ "$side" = "$n" ] && echo yes || echo no)"
+                      if [ "$e" = "${RC_ASSETS-}" ]; then say "OK assets $c listed=$n in-set=0"; fi
+                    done
+                    if [ -f "$d/manifest" ]; then
+                      n=$(cat "$d/manifest"); [[ $n =~ $re_num ]] || exit 1
+                      say "OK assets $c listed=$n in-set=0"
+                    fi
+                    phase=stop
+                    x pg_ctl -D "$pg/data" -m fast -w -t 120 stop
+                    rm -rf "$pg"
+                    say "OK restore $c set=$set tables=$tables rows=$rows extensions=$ext toc=$toc bytes=$size"
+                    if [ "$c" = nightly ]; then set_nightly=$set rows_nightly=$rows; else set_presync=$set rows_presync=$rows; fi
+                  }
+
+                  now=$(date -u +%s) used=0 set_nightly="" set_presync=none rows_nightly=none rows_presync=none
+                  if [ "$mode" = select ]; then
+                    rm -rf "$in"
+                    handoff nightly /backup 1
+                    handoff presync /backup/.presync 0
+                  else
+                    restore nightly
+                    restore presync
+                  fi
+                  cls=-
+                  done="nightly=$set_nightly presync=$set_presync"
+                  # the restore adds the validated row total of each class (database rows only; files and sidecars are not in it)
+                  if [ "$mode" = restore ]; then done="$done rows-nightly=$rows_nightly rows-presync=$rows_presync"; fi
+                - restore-check
+                - select
+              envFrom:
+                - configMapRef:
+                    name: restore-check
+              env: &env
+                - name: HOME
+                  value: /tmp
+                - name: RC_MAX_AGE_HOURS
+                  value: "50"
+                - name: RC_GRACE_SECONDS
+                  value: "7200"
+                - name: RC_SCRATCH_MIB
+                  value: "3584"
+                - name: RC_EXPAND
+                  value: "8"
+              terminationMessagePolicy: File
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                  ephemeral-storage: 3840Mi # the scratch budget, /tmp and the container's own files
+                limits:
+                  cpu: 500m
+                  memory: 128Mi
+                  ephemeral-storage: 4608Mi
+              securityContext:
+                runAsUser: 26 # the backup's user, from the hook source
+                runAsGroup: 26
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+                  readOnly: true
+                - name: scratch
+                  mountPath: /scratch
+                - name: tmp
+                  mountPath: /tmp
+          containers:
+            - name: restore
+              image: placeholder # from the hook source
+              command: ["/bin/bash", "-c"]
+              args:
+                - *script
+                - restore-check
+                - restore
+              envFrom:
+                - configMapRef:
+                    name: restore-check
+              env: *env
+              terminationMessagePolicy: File
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                  ephemeral-storage: 3840Mi # the scratch budget, /tmp and the container's own files
+                limits:
+                  cpu: 1000m
+                  memory: 768Mi
+                  ephemeral-storage: 4608Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: scratch
+                  mountPath: /scratch
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: placeholder # from the hook source
+                readOnly: true
+            - name: scratch
+              emptyDir:
+                sizeLimit: 4Gi
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

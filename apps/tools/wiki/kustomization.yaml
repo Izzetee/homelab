@@ -10,3 +10,18 @@ resources:
   - pg-dump.yaml
   - routes.yaml
   - network-policy.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/pg
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=20 5 * * 0
+      - RC_PREFIX=
+      - RC_TABLES=documents,collections,users,teams
+      - RC_KNOWN=users
+      - RC_COUNTS=count=documents.deletedAt
+      - RC_MANIFEST=files.sha256

@@ -1,0 +1,10 @@
+# Local config, never rendered: what the restore check (apps/_restore-check) reads about the backup (name, namespace, image, node selector, claim,
+# the backup's user). The pod template is the backup CronJob's, copied whole by the replacements of kustomization.yml.
+apiVersion: homelab.io/v1
+kind: BackupHookSource
+metadata:
+  name: hook-presync # <cronjob>-presync
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  template: {} # copied from the CronJob

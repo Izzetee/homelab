@@ -9,3 +9,17 @@ resources:
   - routes.yaml
   - network-policy.yaml
   - backup.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/sqlite
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=10 6 * * 0
+      - RC_PREFIX=open-webui-
+      - RC_TABLES=user,chat
+      - RC_KNOWN=user
+      - RC_EXTRA=chroma

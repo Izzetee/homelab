@@ -7,3 +7,16 @@ resources:
   - routes.yaml
   - network-policy.yaml
   - backup.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/sqlite
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=0 6 * * 0
+      - RC_PREFIX=uptimekuma-
+      - RC_TABLES=monitor,heartbeat,user
+      - RC_KNOWN=user

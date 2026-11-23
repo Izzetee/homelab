@@ -7,3 +7,17 @@ resources:
   - routes.yaml
   - network-policy.yaml
   - backup.yaml
+components:
+  - ../../_backup-hook/single
+  - ../../_restore-check/sqlite
+# settings of the restore check (apps/_restore-check)
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=50 5 * * 0
+      - RC_PREFIX=n8n-
+      - RC_TABLES=workflow_entity,credentials_entity,user
+      - RC_KNOWN=user
+      - RC_EXTRA=n8n-config

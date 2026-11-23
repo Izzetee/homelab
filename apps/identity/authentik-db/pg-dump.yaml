@@ -43,14 +43,44 @@ spec:
               args:
                 - |
                   umask 077
+                  # scheduled run, manual copy (pod name contains -manual-) or PreSync hook (pod name contains -presync-); one lock on the claim serializes them all
+                  host=$(cat /etc/hostname); mode=scheduled
+                  case "$host" in *-manual-*) mode=manual ;; *-presync-*) mode=hook ;; esac
+                  # a hook refuses to run when its deadline (1800s) plus a margin could reach the reserved window; checked again once the lock is held
+                  hook_window() {
+                    ws=$(( $(date -u +%s) % 86400 )); we=$((ws + 1800 + 300))
+                    if { [ "$ws" -lt 14400 ] && [ "$we" -ge 3600 ]; } || [ "$we" -ge 90000 ]; then echo "hook: refused, the run could overlap the reserved window" >&2; exit 76; fi
+                  }
+                  [ "$mode" != hook ] || hook_window
+                  lk=/backup/.partial-lock
+                  # the shared lock file is opened without truncation, and only when it is a plain file (a link or another type is refused before anything is touched)
+                  if [ -L "$lk" ] || { [ -e "$lk" ] && [ ! -f "$lk" ]; }; then echo "backup: the lock path is not a plain file" >&2; exit 1; fi
+                  exec 9>>"$lk"
+                  flock -w 120 9 || { echo "backup: another run holds the lock" >&2; exit 75; }
+                  [ "$mode" != hook ] || hook_window
+                  out=/backup
+                  # the hook's sets live in their own sub-directory, created here only, by the process that holds the lock
+                  if [ "$mode" = hook ]; then
+                    out=/backup/.presync
+                    mkdir -p -m 0700 "$out"
+                    { [ -d "$out" ] && [ ! -L "$out" ]; } || { echo "hook: the hook directory is not a plain directory" >&2; exit 1; }
+                  fi
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
-                  pg_dump -Fc -h authentik-db18-r -U authentik -d authentik -f "/backup/authentik-$stamp.dump"
-                  (cd /backup && sha256sum "authentik-$stamp.dump" >"authentik-$stamp.dump.sha256")
+                  # no mode overwrites or removes an entry of its set name (a leftover or a link included), whatever the clock says
+                  for f in "authentik-$stamp.dump" "authentik-$stamp.dump.sha256"; do
+                    if [ -e "$out/$f" ] || [ -L "$out/$f" ]; then echo "$mode run: $f already exists" >&2; exit 1; fi
+                  done
+                  # a failed run removes the files of its own stamp only, so a partial dump never counts as a set
+                  ok=0
+                  trap '[ "$ok" = 1 ] || rm -f "$out/authentik-$stamp.dump" "$out/authentik-$stamp.dump.sha256"' EXIT
+                  pg_dump -Fc -h authentik-db18-r -U authentik -d authentik -f "$out/authentik-$stamp.dump"
+                  (cd "$out" && sha256sum "authentik-$stamp.dump" >"authentik-$stamp.dump.sha256")
+                  ok=1
                   printf %s "authentik-$stamp" >/dev/termination-log
-                  cd /backup
-                  # a manual run (pod name contains -manual-) never removes an older set
-                  case "$(cat /etc/hostname)" in
-                    *-manual-*) ;;
+                  cd "$out"
+                  # a manual run never removes an older set
+                  case "$mode" in
+                    manual) ;;
                     *) ls -1 authentik-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done ;;
                   esac
                   echo "dump authentik-$stamp.dump written"

@@ -1,7 +1,7 @@
 # Nightly set: a pg_dump of the database, its sha256, the number of documents and a sha256 manifest of the attachment volume (read only here).
 # Every file is written 0600 on the dump volume, 14 sets are kept. A copy that the cluster cannot write is pulled from the NAS side.
 # The job runs in bash with pipefail; a set whose dump, count or manifest could not be written completely is removed and the job fails.
-# It also exits non-zero (set kept) when an attachment name holds a control character or a backslash, or the manifest lists fewer files than were found, so the gap is visible.
+# It also exits non-zero (set kept, no termination message, no pruning; a hook set is removed) when an attachment name holds a control character or a backslash, or the manifest lists fewer files than were found, so the gap is visible.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -45,16 +45,35 @@ spec:
               args:
                 - |
                   umask 077
-                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
-                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
-                  cd /backup
-                  host=$(cat /etc/hostname); manual=0; case "$host" in *-manual-*) manual=1 ;; esac
-                  if [ "$manual" = 1 ]; then
-                    for f in "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256"; do
-                      if [ -e "$f" ] || [ -L "$f" ]; then echo "manual run: $f already exists" >&2; exit 1; fi
-                    done
-                    before=$(LC_ALL=C ls -1A)
+                  # scheduled run, manual copy (pod name contains -manual-) or PreSync hook (pod name contains -presync-); one lock on the claim serializes them all
+                  host=$(cat /etc/hostname); mode=scheduled
+                  case "$host" in *-manual-*) mode=manual ;; *-presync-*) mode=hook ;; esac
+                  # a hook refuses to run when its deadline (1800s) plus a margin could reach the reserved window; checked again once the lock is held
+                  hook_window() {
+                    ws=$(( $(date -u +%s) % 86400 )); we=$((ws + 1800 + 300))
+                    if { [ "$ws" -lt 14400 ] && [ "$we" -ge 3600 ]; } || [ "$we" -ge 90000 ]; then echo "hook: refused, the run could overlap the reserved window" >&2; exit 76; fi
+                  }
+                  [ "$mode" != hook ] || hook_window
+                  lk=/backup/.partial-lock
+                  # the shared lock file is opened without truncation, and only when it is a plain file (a link or another type is refused before anything is touched)
+                  if [ -L "$lk" ] || { [ -e "$lk" ] && [ ! -f "$lk" ]; }; then echo "backup: the lock path is not a plain file" >&2; exit 1; fi
+                  exec 9>>"$lk"
+                  flock -w 120 9 || { echo "backup: another run holds the lock" >&2; exit 75; }
+                  [ "$mode" != hook ] || hook_window
+                  out=/backup
+                  # the hook's sets live in their own sub-directory, created here only, by the process that holds the lock
+                  if [ "$mode" = hook ]; then
+                    out=/backup/.presync
+                    mkdir -p -m 0700 "$out"
+                    { [ -d "$out" ] && [ ! -L "$out" ]; } || { echo "hook: the hook directory is not a plain directory" >&2; exit 1; }
                   fi
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  # no mode overwrites or removes an entry of its set name (a leftover or a link included), whatever the clock says; a manual run also fails unless the directory then holds exactly the earlier entries plus its new set
+                  cd "$out"
+                  for f in "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256"; do
+                    if [ -e "$f" ] || [ -L "$f" ]; then echo "$mode run: $f already exists" >&2; exit 1; fi
+                  done
+                  [ "$mode" != manual ] || before=$(LC_ALL=C ls -1A)
                   # a set is only kept when every file of it was written completely: any failure below removes this stamp's files
                   ok=0
                   trap '[ "$ok" = 1 ] || rm -f "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256"' EXIT
@@ -65,20 +84,30 @@ spec:
                   (cd /data && find . -type f -print0 | sort -z) >"$list"
                   nfiles=$(tr -cd '\0' <"$list" | wc -c | tr -d ' ')
                   (cd /data && xargs -0 -r sha256sum <"$list") | sed 's|^\([0-9a-f]\{64\}\)  \./|\1  |' >"$stamp.files.sha256"
+                  # names as users upload them (spaces, Unicode, quotes) are fine; a control character or a backslash is not (the pull and the restore refuse them too);
+                  # a grep that fails is an error, not a count of zero
+                  grc=0
+                  bad=$(grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$stamp.files.sha256") || grc=$?
+                  [ "$grc" -le 1 ] || { echo "manifest check failed to run" >&2; exit 1; }
+                  lines=$(wc -l <"$stamp.files.sha256" | tr -d ' ')
+                  valid=0
+                  [ "$bad" = 0 ] && [ "$lines" = "$nfiles" ] && valid=1
+                  # a hook set that is not valid is removed again (the trap) before anything else changes; the other modes keep it, so the gap stays visible
+                  if [ "$valid" != 1 ] && [ "$mode" = hook ]; then echo "hook: the manifest is not valid (files=$lines listed=$nfiles names-outside-allowlist=$bad)" >&2; exit 1; fi
                   ok=1
-                  if [ "$manual" = 1 ]; then
+                  if [ "$mode" = manual ]; then
                     after=$(LC_ALL=C ls -1A)
                     [ "$after" = "$(printf '%s\n' "$before" "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
-                  printf %s "$stamp" >/dev/termination-log
-                  if [ "$manual" = 0 ]; then
-                    ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
+                  # success termination and pruning only for a valid set
+                  if [ "$valid" = 1 ]; then
+                    printf %s "$stamp" >/dev/termination-log
+                    if [ "$mode" != manual ]; then
+                      ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
+                    fi
                   fi
-                  # names as users upload them (spaces, Unicode, quotes) are fine; a control character or a backslash is not (the pull and the restore refuse them too)
-                  bad=$({ grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$stamp.files.sha256" || true; })
-                  lines=$(wc -l <"$stamp.files.sha256" | tr -d ' ')
                   echo "set $stamp written: files=$lines listed=$nfiles names-outside-allowlist=$bad"
-                  [ "$bad" = 0 ] && [ "$lines" = "$nfiles" ]
+                  [ "$valid" = 1 ]
               env:
                 - name: PGPASSWORD
                   valueFrom:

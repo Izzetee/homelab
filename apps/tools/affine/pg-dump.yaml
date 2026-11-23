@@ -39,24 +39,47 @@ spec:
               args:
                 - |
                   umask 077
-                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
-                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
-                  host=$(cat /etc/hostname); manual=0; case "$host" in *-manual-*) manual=1 ;; esac
-                  if [ "$manual" = 1 ]; then
-                    for f in "affine-$stamp.dump" "affine-$stamp.dump.sha256"; do
-                      if [ -e "/backup/$f" ] || [ -L "/backup/$f" ]; then echo "manual run: $f already exists" >&2; exit 1; fi
-                    done
-                    before=$(LC_ALL=C ls -1A /backup)
+                  # scheduled run, manual copy (pod name contains -manual-) or PreSync hook (pod name contains -presync-); one lock on the claim serializes them all
+                  host=$(cat /etc/hostname); mode=scheduled
+                  case "$host" in *-manual-*) mode=manual ;; *-presync-*) mode=hook ;; esac
+                  # a hook refuses to run when its deadline (1800s) plus a margin could reach the reserved window; checked again once the lock is held
+                  hook_window() {
+                    ws=$(( $(date -u +%s) % 86400 )); we=$((ws + 1800 + 300))
+                    if { [ "$ws" -lt 14400 ] && [ "$we" -ge 3600 ]; } || [ "$we" -ge 90000 ]; then echo "hook: refused, the run could overlap the reserved window" >&2; exit 76; fi
+                  }
+                  [ "$mode" != hook ] || hook_window
+                  lk=/backup/.partial-lock
+                  # the shared lock file is opened without truncation, and only when it is a plain file (a link or another type is refused before anything is touched)
+                  if [ -L "$lk" ] || { [ -e "$lk" ] && [ ! -f "$lk" ]; }; then echo "backup: the lock path is not a plain file" >&2; exit 1; fi
+                  exec 9>>"$lk"
+                  flock -w 120 9 || { echo "backup: another run holds the lock" >&2; exit 75; }
+                  [ "$mode" != hook ] || hook_window
+                  out=/backup
+                  # the hook's sets live in their own sub-directory, created here only, by the process that holds the lock
+                  if [ "$mode" = hook ]; then
+                    out=/backup/.presync
+                    mkdir -p -m 0700 "$out"
+                    { [ -d "$out" ] && [ ! -L "$out" ]; } || { echo "hook: the hook directory is not a plain directory" >&2; exit 1; }
                   fi
-                  pg_dump -Fc -h affine-db18-r -U affine -d affine -f "/backup/affine-$stamp.dump"
-                  (cd /backup && sha256sum "affine-$stamp.dump" >"affine-$stamp.dump.sha256")
-                  if [ "$manual" = 1 ]; then
-                    after=$(LC_ALL=C ls -1A /backup)
+                  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+                  # no mode overwrites or removes an entry of its set name (a leftover or a link included), whatever the clock says; a manual run also fails unless the directory then holds exactly the earlier entries plus its new set
+                  for f in "affine-$stamp.dump" "affine-$stamp.dump.sha256"; do
+                    if [ -e "$out/$f" ] || [ -L "$out/$f" ]; then echo "$mode run: $f already exists" >&2; exit 1; fi
+                  done
+                  [ "$mode" != manual ] || before=$(LC_ALL=C ls -1A "$out")
+                  # a failed run removes the files of its own stamp only, so a partial dump never counts as a set
+                  ok=0
+                  trap '[ "$ok" = 1 ] || rm -f "$out/affine-$stamp.dump" "$out/affine-$stamp.dump.sha256"' EXIT
+                  pg_dump -Fc -h affine-db18-r -U affine -d affine -f "$out/affine-$stamp.dump"
+                  (cd "$out" && sha256sum "affine-$stamp.dump" >"affine-$stamp.dump.sha256")
+                  ok=1
+                  if [ "$mode" = manual ]; then
+                    after=$(LC_ALL=C ls -1A "$out")
                     [ "$after" = "$(printf '%s\n' "$before" "affine-$stamp.dump" "affine-$stamp.dump.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
                   printf %s "affine-$stamp" >/dev/termination-log
-                  cd /backup
-                  if [ "$manual" = 0 ]; then
+                  cd "$out"
+                  if [ "$mode" != manual ]; then
                     ls -1 affine-*.dump | sort -r | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
                   fi
                   echo "dump affine-$stamp.dump written"

@@ -264,7 +264,7 @@ kube-state-metrics:
     - volumeattachments
   metricLabelsAllowlist:
     - pods=[cnpg.io/cluster]
-    - cronjobs=[homelab.io/backup]
+    - cronjobs=[homelab.io/backup,homelab.io/restore-check]
   rbac:
     extraRules:
       - apiGroups: ["argoproj.io"]
