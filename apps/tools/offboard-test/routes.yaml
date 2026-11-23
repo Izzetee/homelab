@@ -16,12 +16,14 @@ spec:
         - name: offboard-test
           port: 8080
 ---
-# Public name: attaches to the `tunnel` listener only once the namespace carries the public label; no DNS annotation yet.
+# Public name: the DNS opt-in and the `tunnel` listener.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: offboard-test
   namespace: offboard-test
+  annotations:
+    homelab.io/public-dns: "true"
 spec:
   parentRefs:
     - name: homelab-tunnel

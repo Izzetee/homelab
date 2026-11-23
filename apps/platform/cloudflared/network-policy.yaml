@@ -119,6 +119,14 @@ spec:
               protocol: TCP
     - toEndpoints:
         - matchLabels:
+            k8s:io.kubernetes.pod.namespace: offboard-test
+            app.kubernetes.io/name: offboard-test
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
             k8s:io.kubernetes.pod.namespace: penpot
             app.kubernetes.io/name: penpot-frontend
       toPorts:
