@@ -1,7 +1,5 @@
-# The PostgreSQL 18 database of wiki: a new cluster, imported from the frozen PostgreSQL 16 cluster `wiki-db` (CloudNativePG
-# `bootstrap.initdb.import`, type microservice: one database, one owner, no roles). The old cluster is not changed; it is the way back
-# until the soak after the switch has passed. The operator creates the Secret `wiki-db18-app` and the services `wiki-db18-rw` and `wiki-db18-r`.
-# The import connects as the owner with the old cluster's password and CA (verify-full against the `-rw` service name).
+# The PostgreSQL 18 database of wiki (CloudNativePG). It was created by a one-time import from the former PostgreSQL 16 cluster, which is gone; the
+# import settings are not kept. The operator creates the Secret `wiki-db18-app` and the services `wiki-db18-rw` and `wiki-db18-r`.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -18,25 +16,6 @@ spec:
       encoding: UTF8
       localeCollate: en_US.utf8
       localeCType: en_US.utf8
-      import:
-        type: microservice
-        databases:
-          - wiki
-        source:
-          externalCluster: wiki-db
-  externalClusters:
-    - name: wiki-db
-      connectionParameters:
-        host: wiki-db-rw
-        user: wiki
-        dbname: wiki
-        sslmode: verify-full
-      password:
-        name: wiki-db-app
-        key: password
-      sslRootCert:
-        name: wiki-db-ca
-        key: ca.crt
   storage:
     size: 2Gi
     storageClass: local-path-retain

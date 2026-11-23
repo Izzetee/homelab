@@ -104,47 +104,6 @@ spec:
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: wiki-db
-  namespace: wiki
-spec:
-  endpointSelector:
-    matchLabels:
-      cnpg.io/cluster: wiki-db
-  enableDefaultDeny:
-    ingress: true
-    egress: true
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: outline
-        - matchLabels:
-            app.kubernetes.io/name: wiki-pg-dump
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - fromEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: wiki-db18
-            cnpg.io/jobRole: import
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: cnpg-system
-      toPorts:
-        - ports:
-            - port: "8000"
-              protocol: TCP
-  egress:
-    - toEntities:
-        - kube-apiserver
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
   name: wiki-db18
   namespace: wiki
 spec:
@@ -174,28 +133,6 @@ spec:
   egress:
     - toEntities:
         - kube-apiserver
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: wiki-db18-import
-  namespace: wiki
-spec:
-  endpointSelector:
-    matchLabels:
-      cnpg.io/cluster: wiki-db18
-      cnpg.io/jobRole: import
-  enableDefaultDeny:
-    ingress: true
-    egress: true
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: wiki-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
