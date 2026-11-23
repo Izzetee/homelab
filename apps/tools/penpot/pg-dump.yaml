@@ -42,6 +42,14 @@ spec:
                   umask 077
                   stamp=$(date -u +%Y%m%dT%H%M%SZ)
                   cd /backup
+                  # a manual run (pod name contains -manual-) never removes an older set: it refuses a set name that already exists and fails unless the directory then holds exactly the earlier entries plus its new set
+                  host=$(cat /etc/hostname); manual=0; case "$host" in *-manual-*) manual=1 ;; esac
+                  if [ "$manual" = 1 ]; then
+                    for f in "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"; do
+                      if [ -e "$f" ] || [ -L "$f" ]; then echo "manual run: $f already exists" >&2; exit 1; fi
+                    done
+                    before=$(LC_ALL=C ls -1A)
+                  fi
                   # any failure below removes this stamp's files
                   ok=0
                   trap '[ "$ok" = 1 ] || rm -f "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects"' EXIT
@@ -50,12 +58,14 @@ spec:
                   psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from file where deleted_at is null' >"penpot-$stamp.count"
                   psql -h penpot-db-r -U penpot -d penpot -At -c 'select count(*) from storage_object where deleted_at is null' >"penpot-$stamp.objects"
                   ok=1
+                  if [ "$manual" = 1 ]; then
+                    after=$(LC_ALL=C ls -1A)
+                    [ "$after" = "$(printf '%s\n' "$before" "penpot-$stamp.dump" "penpot-$stamp.dump.sha256" "penpot-$stamp.count" "penpot-$stamp.objects" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
+                  fi
                   printf %s "penpot-$stamp" >/dev/termination-log
-                  # pruning is skipped when the pod name contains -manual-
-                  case "$(cat /etc/hostname)" in
-                    *-manual-*) ;;
-                    *) ls -1 penpot-*.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.objects"; done ;;
-                  esac
+                  if [ "$manual" = 0 ]; then
+                    ls -1 penpot-*.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.objects"; done
+                  fi
                   echo "set penpot-$stamp written"
               env:
                 - name: PGPASSWORD
