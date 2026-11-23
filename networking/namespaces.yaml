@@ -83,6 +83,14 @@ metadata:
     homelab.io/public: "true"
     pod-security.kubernetes.io/enforce: restricted
 ---
+# The throwaway app of the offboarding drill. No public label yet: a later pull request opts it in.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: offboard-test
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
 # The wiki is LAN only: no public label, so its route can attach to the `lan` listener only.
 apiVersion: v1
 kind: Namespace

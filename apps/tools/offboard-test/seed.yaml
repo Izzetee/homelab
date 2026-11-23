@@ -1,0 +1,77 @@
+# Writes one 1 KiB object into the app's bucket. The bucket and the key are created by an operator step after this directory is merged, so the
+# job retries until the key works.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: offboard-test-seed
+  namespace: offboard-test
+  labels:
+    app.kubernetes.io/name: offboard-test-seed
+spec:
+  backoffLimit: 30
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: offboard-test-seed
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: docker.io/rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              head -c 1024 /dev/zero | tr '\0' 'x' | rclone rcat garage:offboard-test/seed.txt
+              rclone lsf garage:offboard-test | grep -qx seed.txt
+              echo "seed written"
+          env:
+            - name: HOME
+              value: /tmp
+            - name: RCLONE_CONFIG_GARAGE_TYPE
+              value: s3
+            - name: RCLONE_CONFIG_GARAGE_PROVIDER
+              value: Other
+            - name: RCLONE_CONFIG_GARAGE_ENDPOINT
+              value: http://garage.garage.svc:3900
+            - name: RCLONE_CONFIG_GARAGE_REGION
+              value: garage
+            - name: RCLONE_CONFIG_GARAGE_FORCE_PATH_STYLE
+              value: "true"
+            - name: RCLONE_CONFIG_GARAGE_NO_CHECK_BUCKET
+              value: "true"
+            - name: RCLONE_CONFIG_GARAGE_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: offboard-test-s3
+                  key: access-key-id
+            - name: RCLONE_CONFIG_GARAGE_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: offboard-test-s3
+                  key: secret-access-key
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

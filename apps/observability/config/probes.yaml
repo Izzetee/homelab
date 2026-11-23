@@ -235,6 +235,22 @@ spec:
       static:
         - https://wiki.lan.chill-town.de/_health
 ---
+# The offboarding drill's app by its LAN name.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: offboard-test-lan
+  namespace: monitoring
+spec:
+  module: http_200
+  interval: 30s
+  prober:
+    url: prometheus-blackbox-exporter.monitoring.svc:9115
+  targets:
+    staticConfig:
+      static:
+        - https://offboard-test.lan.chill-town.de/
+---
 # The model gateway's built-in UI on its LAN name (the login page answers 200 without a session).
 apiVersion: monitoring.coreos.com/v1
 kind: Probe
