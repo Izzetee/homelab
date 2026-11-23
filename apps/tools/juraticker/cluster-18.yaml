@@ -1,7 +1,5 @@
-# The PostgreSQL 18 database of juraticker: a new cluster, imported from the frozen PostgreSQL 16 cluster `juraticker-db` (CloudNativePG
-# `bootstrap.initdb.import`, type microservice: one database, one owner, no roles). The old cluster is not changed; it is the way back
-# until the soak after the switch has passed. The operator creates the Secret `juraticker-db18-app` and the services `juraticker-db18-rw` and `juraticker-db18-r`.
-# The import connects as the owner with the old cluster's password and CA (verify-full against the `-rw` service name).
+# The PostgreSQL 18 database of juraticker (CloudNativePG). It was created by a one-time import from the former PostgreSQL 16 cluster, which is gone; the
+# import settings are not kept. The operator creates the Secret `juraticker-db18-app` and the services `juraticker-db18-rw` and `juraticker-db18-r`.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -18,25 +16,6 @@ spec:
       encoding: UTF8
       localeCollate: en_US.utf8
       localeCType: en_US.utf8
-      import:
-        type: microservice
-        databases:
-          - juraticker
-        source:
-          externalCluster: juraticker-db
-  externalClusters:
-    - name: juraticker-db
-      connectionParameters:
-        host: juraticker-db-rw
-        user: juraticker
-        dbname: juraticker
-        sslmode: verify-full
-      password:
-        name: juraticker-db-app
-        key: password
-      sslRootCert:
-        name: juraticker-db-ca
-        key: ca.crt
   storage:
     size: 2Gi
     storageClass: local-path-retain

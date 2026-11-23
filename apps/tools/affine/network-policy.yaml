@@ -102,49 +102,6 @@ spec:
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: affine-db
-  namespace: affine
-spec:
-  endpointSelector:
-    matchLabels:
-      cnpg.io/cluster: affine-db
-  enableDefaultDeny:
-    ingress: true
-    egress: true
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: affine
-        - matchLabels:
-            app.kubernetes.io/name: affine-predeploy
-        - matchLabels:
-            app.kubernetes.io/name: affine-pg-dump
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - fromEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: affine-db18
-            cnpg.io/jobRole: import
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: cnpg-system
-      toPorts:
-        - ports:
-            - port: "8000"
-              protocol: TCP
-  egress:
-    - toEntities:
-        - kube-apiserver
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
   name: affine-db18
   namespace: affine
 spec:
@@ -176,28 +133,6 @@ spec:
   egress:
     - toEntities:
         - kube-apiserver
----
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: affine-db18-import
-  namespace: affine
-spec:
-  endpointSelector:
-    matchLabels:
-      cnpg.io/cluster: affine-db18
-      cnpg.io/jobRole: import
-  enableDefaultDeny:
-    ingress: true
-    egress: true
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: affine-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy

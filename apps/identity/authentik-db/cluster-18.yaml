@@ -1,7 +1,5 @@
-# The PostgreSQL 18 database of authentik: a new cluster, imported from the frozen PostgreSQL 16 cluster `authentik-db` (CloudNativePG
-# `bootstrap.initdb.import`, type microservice: one database, one owner, no roles). The old cluster is not changed; it is the way back
-# until the soak after the switch has passed. The operator creates the Secret `authentik-db18-app` and the services `authentik-db18-rw` and `authentik-db18-r`.
-# The import connects as the owner with the old cluster's password and CA (verify-full against the `-rw` service name).
+# The PostgreSQL 18 database of authentik (CloudNativePG). It was created by a one-time import from the former PostgreSQL 16 cluster, which is gone; the
+# import settings are not kept. The operator creates the Secret `authentik-db18-app` and the services `authentik-db18-rw` and `authentik-db18-r`.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -15,25 +13,6 @@ spec:
     initdb:
       database: authentik
       owner: authentik
-      import:
-        type: microservice
-        databases:
-          - authentik
-        source:
-          externalCluster: authentik-db
-  externalClusters:
-    - name: authentik-db
-      connectionParameters:
-        host: authentik-db-rw
-        user: authentik
-        dbname: authentik
-        sslmode: verify-full
-      password:
-        name: authentik-db-app
-        key: password
-      sslRootCert:
-        name: authentik-db-ca
-        key: ca.crt
   storage:
     size: 2Gi
     storageClass: local-path-retain
