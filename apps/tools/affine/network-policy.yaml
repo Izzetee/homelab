@@ -52,13 +52,6 @@ spec:
               protocol: TCP
     - toEndpoints:
         - matchLabels:
-            cnpg.io/cluster: affine-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
             cnpg.io/cluster: affine-db18
       toPorts:
         - ports:
@@ -228,13 +221,6 @@ spec:
               protocol: TCP
     - toEndpoints:
         - matchLabels:
-            cnpg.io/cluster: affine-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
             cnpg.io/cluster: affine-db18
       toPorts:
         - ports:
@@ -254,13 +240,6 @@ spec:
     ingress: true
     egress: true
   egress:
-    - toEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: affine-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
     - toEndpoints:
         - matchLabels:
             cnpg.io/cluster: affine-db18

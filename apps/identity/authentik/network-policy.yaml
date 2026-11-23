@@ -37,13 +37,6 @@ spec:
               - matchPattern: "*"
     - toEndpoints:
         - matchLabels:
-            cnpg.io/cluster: authentik-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
             cnpg.io/cluster: authentik-db18
       toPorts:
         - ports:
@@ -87,13 +80,6 @@ spec:
           rules:
             dns:
               - matchPattern: "*"
-    - toEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: authentik-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
     - toEndpoints:
         - matchLabels:
             cnpg.io/cluster: authentik-db18

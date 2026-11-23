@@ -54,13 +54,6 @@ spec:
               protocol: TCP
     - toEndpoints:
         - matchLabels:
-            cnpg.io/cluster: wiki-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
-    - toEndpoints:
-        - matchLabels:
             cnpg.io/cluster: wiki-db18
       toPorts:
         - ports:
@@ -217,13 +210,6 @@ spec:
     ingress: true
     egress: true
   egress:
-    - toEndpoints:
-        - matchLabels:
-            cnpg.io/cluster: wiki-db
-      toPorts:
-        - ports:
-            - port: "5432"
-              protocol: TCP
     - toEndpoints:
         - matchLabels:
             cnpg.io/cluster: wiki-db18
