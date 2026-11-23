@@ -1,7 +1,7 @@
 # Nightly set: a pg_dump of the database, its sha256, the number of documents and a sha256 manifest of the attachment volume (read only here).
 # Every file is written 0600 on the dump volume, 14 sets are kept. A copy that the cluster cannot write is pulled from the NAS side.
 # The job runs in bash with pipefail; a set whose dump, count or manifest could not be written completely is removed and the job fails.
-# It also exits non-zero (set kept, no termination message, no pruning; a hook set is removed) when an attachment name holds a control character or a backslash, or the manifest lists fewer files than were found, so the gap is visible.
+# It also exits non-zero in every mode (this run's own files are removed, no termination message, no pruning, no earlier set touched) when an attachment name holds a control character or a backslash, or the manifest lists fewer files than were found, so the gap is visible as a failed job.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -90,24 +90,18 @@ spec:
                   bad=$(grep -cvE '^[0-9a-f]{64}  [^[:cntrl:]\\]+$' "$stamp.files.sha256") || grc=$?
                   [ "$grc" -le 1 ] || { echo "manifest check failed to run" >&2; exit 1; }
                   lines=$(wc -l <"$stamp.files.sha256" | tr -d ' ')
-                  valid=0
-                  [ "$bad" = 0 ] && [ "$lines" = "$nfiles" ] && valid=1
-                  # a hook set that is not valid is removed again (the trap) before anything else changes; the other modes keep it, so the gap stays visible
-                  if [ "$valid" != 1 ] && [ "$mode" = hook ]; then echo "hook: the manifest is not valid (files=$lines listed=$nfiles names-outside-allowlist=$bad)" >&2; exit 1; fi
+                  # an invalid manifest ends every mode here, before the set counts as written: the trap removes this run's own files, nothing is pruned, no termination message is written
+                  { [ "$bad" = 0 ] && [ "$lines" = "$nfiles" ]; } || { echo "$mode run: the manifest is not valid (files=$lines listed=$nfiles names-outside-allowlist=$bad)" >&2; exit 1; }
                   ok=1
                   if [ "$mode" = manual ]; then
                     after=$(LC_ALL=C ls -1A)
                     [ "$after" = "$(printf '%s\n' "$before" "$stamp.dump" "$stamp.dump.sha256" "$stamp.count" "$stamp.files.sha256" | sed '/^$/d' | LC_ALL=C sort)" ] || { echo "manual run: the backup directory is not the earlier entries plus this set" >&2; exit 1; }
                   fi
-                  # success termination and pruning only for a valid set
-                  if [ "$valid" = 1 ]; then
-                    printf %s "$stamp" >/dev/termination-log
-                    if [ "$mode" != manual ]; then
-                      ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
-                    fi
+                  printf %s "$stamp" >/dev/termination-log
+                  if [ "$mode" != manual ]; then
+                    ls -1 *.dump | sort -r | tail -n +15 | while read -r f; do b=${f%.dump}; rm -f "$b.dump" "$b.dump.sha256" "$b.count" "$b.files.sha256"; done
                   fi
-                  echo "set $stamp written: files=$lines listed=$nfiles names-outside-allowlist=$bad"
-                  [ "$valid" = 1 ]
+                  echo "set $stamp written: files=$lines listed=$nfiles"
               env:
                 - name: PGPASSWORD
                   valueFrom:
