@@ -738,28 +738,36 @@ def scenario_late_failure(app, tag):
 
 
 def scenario_wiki_manifest(app, tag):
-    """An attachment name the manifest check refuses, and a manifest check that cannot run, with every class at its full size."""
+    """An attachment name the manifest check refuses (two successive runs with different stamps, in every mode) and a manifest check that cannot run,
+    with every class at its full size: each run fails, writes no termination message, and leaves both directories exactly as they were (all 14 sets, bytes and entries)."""
     if app.kind != "wiki":
         return
-    for mode in ("hook", "nightly"):
-        for what, env in (("invalid name", {}), ("grep error", {"FAIL_GREP": "1"})):
-            t, root = new_root(app)
-            try:
-                if what == "invalid name":
-                    wr(os.path.join(t, "data", "bad\\name.txt"), "synthetic")
-                full_hook_dir(app, root)
-                kept = snapshot(root), snapshot(os.path.join(root, HOOKDIR))
-                c = client(app, mode)
-                r = run(t, c, c["args"][0], app.hosts[mode], env=env)
+    stamps = ("20250601T000000Z", "20250601T000100Z")
+    for mode in ("hook", "manual", "nightly"):
+        t, root = new_root(app)
+        try:
+            wr(os.path.join(t, "data", "bad\\name.txt"), "synthetic")
+            full_hook_dir(app, root)
+            before = snapshot(root), snapshot(os.path.join(root, HOOKDIR))
+            c = client(app, mode)
+            for i, stamp in enumerate(stamps):
+                r = run(t, c, c["args"][0], app.hosts[mode], env={"FAKE_STAMP": stamp}, tag="ab"[i])
                 d = sets_dir(root, mode)
-                now = snapshot(d)
-                lost = [n for n, v in kept[1 if mode == "hook" else 0].items() if now.get(n) != v]
-                extra = len(sets_in(d, app)) - 14
-                # a hook set (and every set whose check could not run) is removed again; a scheduled set with an invalid name stays visible, unpruned
-                want_extra = 1 if (mode == "nightly" and what == "invalid name") else 0
-                check(r.rc not in (0, 75, 76) and r.term is None and not lost and extra == want_extra, f"{tag}: {mode} run, manifest {what}, full size: nonzero, no termination message, nothing earlier lost or pruned (rc {r.rc})")
-            finally:
-                shutil.rmtree(t, ignore_errors=True)
+                check(r.rc not in (0, 75, 76) and r.term is None, f"{tag}: {mode} run {i + 1}, invalid attachment name, full size: nonzero, no termination message (rc {r.rc})")
+                check("manifest is not valid" in r.err and len(sets_in(d, app)) == 14, f"{tag}: ... failed on the manifest check, the directory holds exactly its 14 sets")
+                check((snapshot(root), snapshot(os.path.join(root, HOOKDIR))) == before, f"{tag}: ... both directories unchanged: no own file kept, nothing earlier removed or pruned, bytes and entries equal")
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
+    for mode in ("hook", "nightly"):
+        t, root = new_root(app)
+        try:
+            full_hook_dir(app, root)
+            kept = snapshot(root), snapshot(os.path.join(root, HOOKDIR))
+            c = client(app, mode)
+            r = run(t, c, c["args"][0], app.hosts[mode], env={"FAIL_GREP": "1"})
+            check(r.rc not in (0, 75, 76) and r.term is None and (snapshot(root), snapshot(os.path.join(root, HOOKDIR))) == kept, f"{tag}: {mode} run, manifest check cannot run, full size: nonzero, no termination message, nothing earlier lost or pruned, no partial left (rc {r.rc})")
+        finally:
+            shutil.rmtree(t, ignore_errors=True)
 
 
 def scenario_lock_file(app, tag):
