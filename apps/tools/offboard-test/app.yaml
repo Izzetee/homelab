@@ -1,0 +1,65 @@
+# The one writer: a static page, served by the pinned rclone image (already used by the Garage backup).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: offboard-test
+  namespace: offboard-test
+  labels:
+    app.kubernetes.io/name: offboard-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: offboard-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: offboard-test
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: docker.io/rclone/rclone:1.76.0@sha256:7cbeec24a44f206067597c0368be4de90ae19a64d5113c7d1938bd737a81e466
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              printf 'offboard-test\n' >/srv/index.html
+              exec rclone serve http /srv --addr :8080 --read-only
+          env:
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: srv
+              mountPath: /srv
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: srv
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

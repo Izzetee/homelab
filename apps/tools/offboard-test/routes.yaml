@@ -1,0 +1,35 @@
+# LAN name: the `lan` listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: offboard-test-lan
+  namespace: offboard-test
+spec:
+  parentRefs:
+    - name: homelab
+      namespace: gateway
+      sectionName: lan
+  hostnames:
+    - offboard-test.lan.chill-town.de
+  rules:
+    - backendRefs:
+        - name: offboard-test
+          port: 8080
+---
+# Public name: attaches to the `tunnel` listener only once the namespace carries the public label; no DNS annotation yet.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: offboard-test
+  namespace: offboard-test
+spec:
+  parentRefs:
+    - name: homelab-tunnel
+      namespace: gateway
+      sectionName: tunnel
+  hostnames:
+    - offboard-test.chill-town.de
+  rules:
+    - backendRefs:
+        - name: offboard-test
+          port: 8080

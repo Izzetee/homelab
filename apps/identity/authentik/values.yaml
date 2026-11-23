@@ -142,6 +142,11 @@ worker:
         secretKeyRef:
           name: authentik-oidc-clients
           key: hubble-ui
+    - name: AUTHENTIK_OIDC_OFFBOARD_TEST_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-clients
+          key: offboard-test
     - name: AUTHENTIK_OIDC_PENPOT_CLOUDFLARE_SECRET
       valueFrom:
         secretKeyRef:

@@ -3,10 +3,12 @@
   "keys": [
     {"name": "backup", "store": "garage/backup-s3", "role": "backup"},
     {"name": "canary", "store": "garage/canary-s3"},
-    {"name": "penpot", "store": "apps/penpot/s3"}
+    {"name": "penpot", "store": "apps/penpot/s3"},
+    {"name": "offboard-test", "store": "apps/offboard-test/s3"}
   ],
   "buckets": [
     {"name": "canary", "maxSize": 67108864, "maxObjects": 1000, "grants": {"canary": ["read", "write"]}},
-    {"name": "penpot", "maxSize": 536870912, "maxObjects": 100000, "grants": {"penpot": ["read", "write"]}}
+    {"name": "penpot", "maxSize": 536870912, "maxObjects": 100000, "grants": {"penpot": ["read", "write"]}},
+    {"name": "offboard-test", "maxSize": 67108864, "maxObjects": 1000, "grants": {"offboard-test": ["read", "write"]}}
   ]
 }
