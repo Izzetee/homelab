@@ -37,6 +37,5 @@ resources:
   - agentgateway.yaml
   - wiki.yaml
   - penpot.yaml
-  - offboard-test.yaml
   - blocky.yaml
   - hl-access.yaml

@@ -9,7 +9,6 @@ garage
 hubble-ui
 juraticker
 monitoring
-offboard-test
 open-webui
 penpot
 wiki

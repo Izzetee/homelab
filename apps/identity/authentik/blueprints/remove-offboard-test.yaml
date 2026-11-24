@@ -1,0 +1,20 @@
+# Removes the policy binding, the application and the OIDC provider that the blueprint of the removed throwaway app created. Exactly these
+# three objects, identified as that blueprint identified them; nothing else is named or changed.
+version: 1
+metadata:
+  name: homelab-remove-offboard-test
+entries:
+  - model: authentik_policies.policybinding
+    state: absent
+    identifiers:
+      target: !Find [authentik_core.application, [slug, offboard-test]]
+      group: !Find [authentik_core.group, [name, authentik Admins]]
+      order: 0
+  - model: authentik_core.application
+    state: absent
+    identifiers:
+      slug: offboard-test
+  - model: authentik_providers_oauth2.oauth2provider
+    state: absent
+    identifiers:
+      name: offboard-test
