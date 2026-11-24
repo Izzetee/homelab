@@ -14,12 +14,12 @@ configMapGenerator:
       - blueprints/deactivate-akadmin.yaml
       - blueprints/grafana.yaml
       - blueprints/hubble-ui.yaml
-      - blueprints/offboard-test.yaml
       - blueprints/openbao.yaml
       - blueprints/openbao-ui.yaml
       - blueprints/outline.yaml
       - blueprints/penpot-cloudflare.yaml
       - blueprints/penpot.yaml
       - blueprints/remove-legacy-grafana.yaml
+      - blueprints/remove-offboard-test.yaml
 generatorOptions:
   disableNameSuffixHash: true

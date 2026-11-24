@@ -145,8 +145,6 @@ spec:
       namespace: wiki
     - server: https://kubernetes.default.svc
       namespace: penpot
-    - server: https://kubernetes.default.svc
-      namespace: offboard-test
   clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: ""
