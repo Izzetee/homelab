@@ -35,7 +35,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: n8n
-          image: docker.io/n8nio/n8n:2.48.7@sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861
+          image: docker.io/n8nio/n8n:2.49.6@sha256:a1a9955a4a9e5dd9fa65a62f59e0751351b45b9e5cd2c17e6e330a8d0026cad8
           env:
             - name: N8N_HOST
               value: agent.chill-town.de
