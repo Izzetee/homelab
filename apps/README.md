@@ -13,6 +13,7 @@ Conventions:
   `kubernetes.io/hostname NotIn [pi4-1]`, only prefer `homelab.io/node-class In [pi]`, and have an egress policy that allows no
   private range except cluster DNS (its pods leave with the node's LAN address).
 - Penpot's pods require the node label `homelab.io/penpot=true`, set in the Ansible host variables.
+- Dependency-Track is rendered once from its Helm chart into plain manifests (`tools/dependency-track/README.md` holds the values and the command): a chart bump is a re-render and a reviewed diff.
 - `kustomize build <dir> | kubeconform -strict` passes locally and in CI.
 
 Layout:

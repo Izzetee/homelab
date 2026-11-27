@@ -146,6 +146,8 @@ spec:
       namespace: wiki
     - server: https://kubernetes.default.svc
       namespace: penpot
+    - server: https://kubernetes.default.svc
+      namespace: dependency-track
   clusterResourceWhitelist: []
   namespaceResourceBlacklist:
     - group: ""

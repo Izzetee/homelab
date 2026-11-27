@@ -40,3 +40,4 @@ resources:
   - blocky.yaml
   - hl-access.yaml
   - trivy-operator.yaml
+  - dependency-track.yaml

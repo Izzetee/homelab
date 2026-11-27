@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The backup CronJob is the only CronJob of this layer: the backup hook component selects its source by kind.
+resources:
+  - pg-dump.yaml
+components:
+  - ../../../_backup-hook/single
+  - ../../../_restore-check/pg
+configMapGenerator:
+  - name: restore-check
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - RC_SCHEDULE=0 7 * * 0
+      - RC_PREFIX=dtrack-
+      - RC_TABLES=PROJECT,COMPONENT,TEAM,USER
+      - RC_KNOWN=TEAM
+      - RC_COUNTS=count=PROJECT.INACTIVE_SINCE
+      - RC_EXTENSIONS=pg_trgm

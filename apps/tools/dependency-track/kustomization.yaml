@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# the namespace on the generated ConfigMaps lets kustomize rewrite their hashed names into the pod templates
+namespace: dependency-track
+resources:
+  - dependency-track.yaml
+  - cluster.yaml
+  - pvc.yaml
+  - routes.yaml
+  - sbom-upload.yaml
+  - network-policy.yaml
+  # the dump CronJob with its backup hook and restore check is a layer of its own: the hook component selects its source CronJob by kind
+  - backup
+configMapGenerator:
+  # config.json of the frontend (OIDC settings); mounted over the image's file, the root file system stays read-only
+  - name: dependency-track-frontend-config
+    files:
+      - config.json=frontend-config.json
+  - name: sbom-upload-script
+    files:
+      - sbom-upload.py

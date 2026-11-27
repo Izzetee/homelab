@@ -91,6 +91,14 @@ metadata:
   labels:
     pod-security.kubernetes.io/enforce: restricted
 ---
+# Dependency-Track is LAN only: no public label, so its route can attach to the `lan` listener only.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dependency-track
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
 # The LAN resolver.
 apiVersion: v1
 kind: Namespace
