@@ -12,6 +12,7 @@ configMapGenerator:
       - blueprints/agentgateway.yaml
       - blueprints/argocd.yaml
       - blueprints/deactivate-akadmin.yaml
+      - blueprints/dependency-track.yaml
       - blueprints/grafana.yaml
       - blueprints/hubble-ui.yaml
       - blueprints/openbao.yaml
