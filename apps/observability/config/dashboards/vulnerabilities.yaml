@@ -1,0 +1,314 @@
+# Vulnerability dashboard (written for this repository): critical and high findings per image from the series of the Trivy Operator (job `trivy-operator`). Grafana's dashboard sidecar loads it from this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vulnerabilities
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  vulnerabilities.json: |
+    {
+      "uid": "vulnerabilities",
+      "title": "Vulnerabilities",
+      "tags": [
+        "homelab",
+        "security"
+      ],
+      "timezone": "utc",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": false,
+      "refresh": "5m",
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Images with critical findings",
+          "description": "Distinct images (registry, repository, tag, digest) with at least one critical finding.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(max by (image_registry,image_repository,image_tag,image_digest) (trivy_image_vulnerabilities{severity=\"Critical\"} >= 1)) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Images with high findings",
+          "description": "Distinct images with at least one high finding.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 6,
+            "y": 0,
+            "w": 6,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(max by (image_registry,image_repository,image_tag,image_digest) (trivy_image_vulnerabilities{severity=\"High\"} >= 1)) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Scanner up",
+          "description": "1 while Prometheus scrapes the Trivy Operator.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 12,
+            "y": 0,
+            "w": 6,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 1
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "min(up{job=\"trivy-operator\"}) or vector(0)",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Scanned images",
+          "description": "Distinct images with a vulnerability report.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 0,
+            "w": 6,
+            "h": 4
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "count(max by (image_registry,image_repository,image_tag,image_digest) (trivy_image_vulnerabilities))",
+              "legendFormat": "",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "none"
+          }
+        },
+        {
+          "id": 5,
+          "type": "table",
+          "title": "Critical and high findings per image",
+          "description": "Finding counts per image and severity; the same image in several pods is one row.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "gridPos": {
+            "x": 0,
+            "y": 4,
+            "w": 24,
+            "h": 14
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "Value",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "expr": "max by (image_registry,image_repository,image_tag,image_digest,severity) (trivy_image_vulnerabilities{severity=~\"Critical|High\"} > 0)",
+              "format": "table",
+              "instant": true,
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "templating": {
+        "list": []
+      }
+    }

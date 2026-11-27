@@ -1,0 +1,137 @@
+# Default deny in the namespace (cluster DNS excepted). The operator reads the API server and health-checks the Trivy server; Prometheus
+# scrapes its metrics. The Trivy server takes layers from the operator and the scan pods and downloads its database from the internet. A scan pod
+# (label app.kubernetes.io/component=scan-job, set by the chart value scanJobPodTemplateLabels) talks to the Trivy server and pulls image
+# metadata from registries on 443.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: default-deny
+  namespace: trivy-system
+spec:
+  endpointSelector: {}
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trivy-operator
+  namespace: trivy-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: trivy-operator
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: monitoring
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+  egress:
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports:
+            - port: "6443"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: trivy-system
+            app.kubernetes.io/name: trivy-server
+      toPorts:
+        - ports:
+            - port: "4954"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: trivy-server
+  namespace: trivy-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: trivy-server
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: trivy-system
+            app.kubernetes.io/name: trivy-operator
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: trivy-system
+            app.kubernetes.io/component: scan-job
+      toPorts:
+        - ports:
+            - port: "4954"
+              protocol: TCP
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 100.64.0.0/10
+            - 169.254.0.0/16
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: scan-job
+  namespace: trivy-system
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: scan-job
+  enableDefaultDeny:
+    ingress: true
+    egress: true
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: trivy-system
+            app.kubernetes.io/name: trivy-server
+      toPorts:
+        - ports:
+            - port: "4954"
+              protocol: TCP
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 100.64.0.0/10
+            - 169.254.0.0/16
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

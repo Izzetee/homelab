@@ -122,3 +122,25 @@ spec:
         - action: replace
           targetLabel: job
           replacement: blocky
+---
+# The image scanner: the metrics port of its Service. honorLabels keeps the namespace label of each scanned workload.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trivy-operator
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - trivy-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trivy-operator
+  endpoints:
+    - port: metrics
+      interval: 60s
+      honorLabels: true
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: trivy-operator

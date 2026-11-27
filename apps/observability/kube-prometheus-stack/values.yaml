@@ -88,6 +88,15 @@ alertmanager:
         - receiver: "null"
           matchers:
             - 'severity = info'
+        # grouped by alert name only; the repeat interval stays below the notification log retention
+        - receiver: discord
+          matchers:
+            - 'alertname = HomelabImageCriticalVulnerabilities'
+          group_by:
+            - alertname
+          group_wait: 5m
+          group_interval: 1h
+          repeat_interval: 96h
         - receiver: discord
           matchers:
             - 'severity =~ "warning|critical"'

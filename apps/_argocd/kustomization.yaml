@@ -39,3 +39,4 @@ resources:
   - penpot.yaml
   - blocky.yaml
   - hl-access.yaml
+  - trivy-operator.yaml
