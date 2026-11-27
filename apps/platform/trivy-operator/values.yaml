@@ -23,9 +23,9 @@ podSecurityContext:
 resources:
   requests:
     cpu: 50m
-    memory: 128Mi
+    memory: 256Mi
   limits:
-    memory: 512Mi
+    memory: 1Gi
 serviceMonitor:
   enabled: false
 compliance:
