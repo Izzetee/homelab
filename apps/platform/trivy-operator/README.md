@@ -13,6 +13,7 @@ values in `values.yaml`, plus the manifests of this directory.
 - `network-policy.yaml`: default deny plus the rules of the operator, the Trivy server and the scan pods (label
   `app.kubernetes.io/component=scan-job`, set by `trivyOperator.scanJobPodTemplateLabels`).
 - `job-policy.yaml`: a ValidatingAdmissionPolicy that admits Job create and delete requests of ServiceAccounts of `trivy-system` only in `trivy-system`.
+- `sbom-reader.yaml`: a ClusterRole with get/list on `sbomreports` and its binding to the ServiceAccount `sbom-upload` of Dependency-Track.
 
 A chart bump: change `targetRevision` in `apps/_argocd/trivy-operator.yaml`, check the rendered diff, keep the image pins in `values.yaml`
 (`tag@digest`) in step with the chart's `appVersion`.

@@ -1,0 +1,22 @@
+# The SBOM upload of Dependency-Track reads the SBOM reports of every namespace: get and list on that kind only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dependency-track-sbom-reader
+rules:
+  - apiGroups: ["aquasecurity.github.io"]
+    resources: ["sbomreports"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dependency-track-sbom-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dependency-track-sbom-reader
+subjects:
+  - kind: ServiceAccount
+    name: sbom-upload
+    namespace: dependency-track

@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - network-policy.yaml
   - job-policy.yaml
+  - sbom-reader.yaml
