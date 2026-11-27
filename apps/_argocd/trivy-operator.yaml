@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trivy-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trivy-system
+  sources:
+    - repoURL: https://aquasecurity.github.io/helm-charts
+      chart: trivy-operator
+      targetRevision: 0.38.1
+      helm:
+        releaseName: trivy-operator
+        valueFiles:
+          - $values/apps/platform/trivy-operator/values.yaml
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Izzetee/homelab.git
+      targetRevision: main
+      path: apps/platform/trivy-operator
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

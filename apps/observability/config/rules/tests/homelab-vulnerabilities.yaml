@@ -1,0 +1,99 @@
+# promtool unit tests of homelab-vulnerabilities.yaml. The rule file list is replaced by the rendered rule files when the tests run.
+rule_files:
+  - rules.yml
+evaluation_interval: 10m
+tests:
+  - name: one alert per image across pods and namespaces
+    interval: 10m
+    input_series:
+      - series: 'trivy_image_vulnerabilities{namespace="a",name="web-1",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="Critical"}'
+        values: '2+0x30'
+      - series: 'trivy_image_vulnerabilities{namespace="b",name="web-2",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="Critical"}'
+        values: '3+0x30'
+      - series: 'trivy_image_vulnerabilities{namespace="a",name="web-1",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="High"}'
+        values: '9+0x30'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts: []
+      - eval_time: 3h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts:
+          - exp_labels: {severity: warning, image_registry: docker.io, image_repository: library/nginx, image_tag: "1.0", image_digest: "sha256:aaa"}
+            exp_annotations: {summary: "Image docker.io/library/nginx:1.0 has critical vulnerabilities"}
+  - name: same repository, other digest is its own alert
+    interval: 10m
+    input_series:
+      - series: 'trivy_image_vulnerabilities{namespace="a",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="Critical"}'
+        values: '1+0x30'
+      - series: 'trivy_image_vulnerabilities{namespace="a",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:bbb",severity="Critical"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts:
+          - exp_labels: {severity: warning, image_registry: docker.io, image_repository: library/nginx, image_tag: "1.0", image_digest: "sha256:aaa"}
+            exp_annotations: {summary: "Image docker.io/library/nginx:1.0 has critical vulnerabilities"}
+          - exp_labels: {severity: warning, image_registry: docker.io, image_repository: library/nginx, image_tag: "1.0", image_digest: "sha256:bbb"}
+            exp_annotations: {summary: "Image docker.io/library/nginx:1.0 has critical vulnerabilities"}
+  - name: a rescan gap keeps the alert firing, then it resolves
+    interval: 10m
+    input_series:
+      - series: 'trivy_image_vulnerabilities{namespace="a",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="Critical"}'
+        values: '2+0x18 _x80'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts:
+          - exp_labels: {severity: warning, image_registry: docker.io, image_repository: library/nginx, image_tag: "1.0", image_digest: "sha256:aaa"}
+            exp_annotations: {summary: "Image docker.io/library/nginx:1.0 has critical vulnerabilities"}
+      - eval_time: 8h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts:
+          - exp_labels: {severity: warning, image_registry: docker.io, image_repository: library/nginx, image_tag: "1.0", image_digest: "sha256:aaa"}
+            exp_annotations: {summary: "Image docker.io/library/nginx:1.0 has critical vulnerabilities"}
+      - eval_time: 10h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts: []
+  - name: high findings and zero criticals stay quiet
+    interval: 10m
+    input_series:
+      - series: 'trivy_image_vulnerabilities{namespace="a",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="High"}'
+        values: '5+0x30'
+      - series: 'trivy_image_vulnerabilities{namespace="a",image_registry="docker.io",image_repository="library/nginx",image_tag="1.0",image_digest="sha256:aaa",severity="Critical"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: HomelabImageCriticalVulnerabilities
+        exp_alerts: []
+  - name: scanner scrape down
+    interval: 10m
+    input_series:
+      - series: 'up{job="trivy-operator",instance="x:8080"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HomelabVulnerabilityScannerDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: trivy-operator, instance: "x:8080"}
+            exp_annotations: {summary: "The Trivy Operator is not scraped: no new vulnerability reports are visible"}
+  - name: scanner target absent
+    interval: 10m
+    input_series:
+      - series: 'up{job="unrelated"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HomelabVulnerabilityScannerDown
+        exp_alerts:
+          - exp_labels: {severity: warning, job: trivy-operator}
+            exp_annotations: {summary: "The Trivy Operator is not scraped: no new vulnerability reports are visible"}
+  - name: scanner up
+    interval: 10m
+    input_series:
+      - series: 'up{job="trivy-operator",instance="x:8080"}'
+        values: '1+0x30'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: HomelabVulnerabilityScannerDown
+        exp_alerts: []

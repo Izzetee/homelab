@@ -1,0 +1,31 @@
+# Admission guard: ServiceAccounts of trivy-system may create and delete Jobs only in that namespace (scan jobs run there).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: trivy-operator-jobs
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "DELETE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: trivy-system-serviceaccounts
+      expression: "request.userInfo.username.startsWith('system:serviceaccount:trivy-system:')"
+  validations:
+    - expression: "request.namespace == 'trivy-system'"
+      message: "ServiceAccounts of trivy-system manage Jobs in trivy-system only"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: trivy-operator-jobs
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  policyName: trivy-operator-jobs
+  validationActions: [Deny]

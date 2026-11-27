@@ -1,0 +1,111 @@
+# Values of the trivy-operator chart (see the chart's values.yaml for every key).
+image:
+  registry: docker.io
+  repository: aquasec/trivy-operator
+  tag: 0.36.1@sha256:05191a514247ae644dd5cc71306a94f44faff0a6a3fa817235911b911ecebcb9
+nodeCollector:
+  tag: 0.3.1@sha256:f4702ce4667388f0219d6248d623a7e816231c2d4561d6af01c3ae053e524025
+excludeNamespaces: trivy-system,hl-probe
+# amd64 nodeSelector for the operator and the Trivy server; the affinity below keeps the operator off the control plane; scan jobs get their own affinity (trivyOperator.scanJobAffinity)
+nodeSelector:
+  kubernetes.io/arch: amd64
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: DoesNotExist
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+serviceMonitor:
+  enabled: false
+compliance:
+  specs: []
+operator:
+  replicas: 1
+  scanJobsConcurrentLimit: 2
+  scanJobTimeout: 10m
+  # built-in report expiry: an expired report is deleted and the workload is scanned again
+  scannerReportTTL: "24h"
+  clusterSbomCacheEnabled: true
+  cacheReportTTL: 120h
+  builtInTrivyServer: true
+  exposedSecretScannerEnabled: false
+  rbacAssessmentScannerEnabled: false
+  infraAssessmentScannerEnabled: false
+  clusterComplianceEnabled: false
+  # chart flags of the operator's access (see the chart's values.yaml)
+  accessGlobalSecretsAndServiceAccount: false
+trivyOperator:
+  scanJobsInSameNamespace: false
+  scanJobAffinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values: [amd64]
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+  scanJobPodTemplateLabels: app.kubernetes.io/component=scan-job
+  scanJobPodTemplatePodSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  scanJobPodTemplateContainerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    privileged: false
+    readOnlyRootFilesystem: true
+  # glob patterns of images the operator skips (chart value)
+  excludeImages: ghcr.io/izzetee/*/*
+  supportedConfigAuditKinds: "Workload,Service,Role,ClusterRole,NetworkPolicy,Ingress,LimitRange,ResourceQuota,PersistentVolume,PersistentVolumeClaim"
+trivy:
+  image:
+    registry: docker.io
+    repository: aquasec/trivy
+    tag: 0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+  storageClassEnabled: false
+  useEmbeddedRegoPolicies: "true"
+  timeout: 9m0s
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+      ephemeralStorage: 8Gi
+  server:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    podSecurityContext:
+      runAsUser: 65534
+      runAsNonRoot: true
+      fsGroup: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    securityContext:
+      privileged: false
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]

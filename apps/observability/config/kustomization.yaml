@@ -12,6 +12,7 @@ resources:
   - rules/homelab-object-storage.yaml
   - rules/homelab-agentgateway.yaml
   - rules/homelab-dns.yaml
+  - rules/homelab-vulnerabilities.yaml
   - dashboards/homelab-overview.yaml
   - dashboards/nas.yaml
   - dashboards/home-assistant.yaml
@@ -21,3 +22,4 @@ resources:
   - dashboards/dns-queries.yaml
   - dashboards/hosts.yaml
   - dashboards/host-detail.yaml
+  - dashboards/vulnerabilities.yaml

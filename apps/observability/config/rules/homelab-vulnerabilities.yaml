@@ -1,0 +1,26 @@
+# Alerts of the image scanner (series of the Trivy Operator, job `trivy-operator`). One alert per image (registry, repository, tag, digest), however many
+# pods run it; it stays firing while a rescan replaces the report. Unit tests: tests/homelab-vulnerabilities.yaml (promtool).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-vulnerabilities
+  namespace: monitoring
+spec:
+  groups:
+    - name: homelab-vulnerabilities
+      rules:
+        - alert: HomelabImageCriticalVulnerabilities
+          expr: max by (image_registry, image_repository, image_tag, image_digest) (trivy_image_vulnerabilities{severity="Critical"}) >= 1
+          for: 2h
+          keep_firing_for: 6h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Image {{ $labels.image_registry }}/{{ $labels.image_repository }}:{{ $labels.image_tag }} has critical vulnerabilities"
+        - alert: HomelabVulnerabilityScannerDown
+          expr: up{job="trivy-operator"} == 0 or absent(up{job="trivy-operator"})
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The Trivy Operator is not scraped: no new vulnerability reports are visible"
