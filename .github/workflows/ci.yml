@@ -147,7 +147,7 @@ jobs:
             echo "SKIP ansible no files"
             exit 0
           fi
-          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work/ansible --entrypoint ansible-lint ghcr.io/ansible/community-ansible-dev-tools:v26.11.0@sha256:f9caf58a32195c1c2d23cd2ef7f465bc89dd1c6adffa44cd144689b1d41a575a .
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work/ansible --entrypoint ansible-lint ghcr.io/ansible/community-ansible-dev-tools:v26.11.1@sha256:27fa715288df50a6b77e498848f2dbc156c55110f7fdcc50335963d61a79c84f .
 
   tofu:
     name: tofu
