@@ -58,7 +58,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          image: docker.io/penpotapp/frontend:2.19.3@sha256:d22ce9f6f4859adbc726f45965da0d4b083817b0c13ca4a49aa3e927901cccb9
+          image: docker.io/penpotapp/frontend:2.19.5@sha256:5b7ad570f137162b0c4cae300e42a376c15e05cb6ec89404f67e43a0996d0107
           env:
             - name: PENPOT_PUBLIC_URI
               value: "https://penpot.chill-town.de"
