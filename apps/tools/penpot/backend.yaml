@@ -55,7 +55,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: docker.io/penpotapp/backend:2.19.3@sha256:31ebb4dabd104c2ed3ae736dcf5a6043a0660ddaac7bcd8501c28036fb4b578c
+          image: docker.io/penpotapp/backend:2.19.5@sha256:6bb018a295812ed1a7f0b996079187a72c314feeab1aa7ea65b5b0dc35aad341
           env:
             - name: HOME
               value: "/tmp"
