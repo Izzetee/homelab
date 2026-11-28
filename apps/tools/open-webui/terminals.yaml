@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: open-terminal
-          image: ghcr.io/open-webui/open-terminal:latest@sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11
+          image: ghcr.io/open-webui/open-terminal:latest@sha256:f16313cc3f8f11c52a4b225905b80b0fac96bd0e848d05c5e1b2b87854ec0672
           command: ["/usr/bin/tini", "--", "bash", "-c"]
           args:
             - |
@@ -125,7 +125,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: open-terminal-mysql
-          image: ghcr.io/open-webui/open-terminal:latest@sha256:94181fbaedfbfc4756df342de83483188b528eb75b7861c4252238c5fafa3b11
+          image: ghcr.io/open-webui/open-terminal:latest@sha256:f16313cc3f8f11c52a4b225905b80b0fac96bd0e848d05c5e1b2b87854ec0672
           command: ["/usr/bin/tini", "--", "bash", "-c"]
           args:
             - |
