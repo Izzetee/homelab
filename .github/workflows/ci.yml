@@ -165,7 +165,7 @@ jobs:
             echo "SKIP tofu no files"
             exit 0
           fi
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 fmt -check -recursive tofu/
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work ghcr.io/opentofu/opentofu:1.13.10@sha256:f89e790760542e8ca6c168301e7ab7fb0885ea9a4856fb810e75ee02b40ae727 fmt -check -recursive tofu/
       - name: tofu validate
         run: |
           set -euo pipefail
@@ -176,8 +176,8 @@ jobs:
             exit 0
           fi
           for d in "${envs[@]}"; do
-            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 init -backend=false -lockfile=readonly -input=false
-            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.9@sha256:f5aef7f2632b490e3c289a239d7974497d0583f3df6bfa35e8eb31a367ee5ec0 validate
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.10@sha256:f89e790760542e8ca6c168301e7ab7fb0885ea9a4856fb810e75ee02b40ae727 init -backend=false -lockfile=readonly -input=false
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w "/work/$d" ghcr.io/opentofu/opentofu:1.13.10@sha256:f89e790760542e8ca6c168301e7ab7fb0885ea9a4856fb810e75ee02b40ae727 validate
           done
 
   ci-ok:
